@@ -1,6 +1,11 @@
 # Apple Intelligence / Siri / Private Cloud Compute
-# guzzoni.apple.com, gateway.icloud.com, apps.mzstatic.com, gspe1-ssl.ls.apple.com
-# are already covered by blackmatrix7 Apple list, not duplicated here.
+# NOTE: gateway.icloud.com / p152-contacts.icloud.com / gdmf*.apple.com exist in
+# blackmatrix7 Apple list BUT that list routes to 🍎 Apple = direct in this config,
+# leaking PCC traffic to China CDNs. Must be proxied here (this file wins by order).
+host, gateway.icloud.com, PROXY
+host-suffix, contacts.icloud.com, PROXY
+host, gdmf.apple.com, PROXY
+host, gdmf-ados.apple.com, PROXY
 
 host-suffix, smoot.apple.com, PROXY
 host-suffix, apple-relay.apple.com, PROXY
