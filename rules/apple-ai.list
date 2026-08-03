@@ -11,3 +11,21 @@ host-suffix, cp4.cloudflare.com, PROXY
 host-suffix, gspe1-ssl.ls.apple.com, PROXY
 host-suffix, gateway.icloud.com, PROXY
 host-suffix, apps.mzstatic.com, PROXY
+
+# OpenAI / ChatGPT (Apple Intelligence extension)
+host-suffix, chatgpt.com, PROXY
+host-suffix, chat.openai.com, PROXY
+host-suffix, ios.chat.openai.com, PROXY
+host-suffix, android.chat.openai.com, PROXY
+host-suffix, desktop.chat.openai.com, PROXY
+host-suffix, openai.com, PROXY
+host-suffix, auth.openai.com, PROXY
+host-suffix, auth0.openai.com, PROXY
+host-suffix, auth0.com, PROXY
+host-suffix, api.openai.com, PROXY
+host-suffix, oaistatic.com, PROXY
+host-suffix, oaiusercontent.com, PROXY
+host-suffix, chatgpt.livekit.cloud, PROXY
+host-suffix, host.livekit.cloud, PROXY
+host-suffix, turn.livekit.cloud, PROXY
+host-suffix, ai.com, PROXY
