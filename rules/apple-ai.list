@@ -8,6 +8,7 @@ host-suffix, apple-relay.fastly-edge.com, PROXY
 host-suffix, apple-relay.mask.apple-dns.net, PROXY
 host-suffix, apple-relay.akamaized.net, PROXY
 host-suffix, cp4.cloudflare.com, PROXY
+host-suffix, cloud.com, PROXY
 host-suffix, gspe1-ssl.ls.apple.com, PROXY
 host-suffix, gateway.icloud.com, PROXY
 host-suffix, apps.mzstatic.com, PROXY
