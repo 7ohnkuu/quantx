@@ -4,7 +4,8 @@
 # These host rules match BEFORE blackmatrix7, so its icloud.com/apple.com wildcards
 # cannot leak PCC traffic to China CDNs.
 host, gateway.icloud.com, PROXY
-host-suffix, contacts.icloud.com, PROXY
+host-keyword, p152-, PROXY
+host, p196-acsegateway.icloud.com, PROXY
 host, gdmf.apple.com, PROXY
 host, gdmf-ados.apple.com, PROXY
 host, guzzoni.apple.com, PROXY
