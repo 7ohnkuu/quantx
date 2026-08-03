@@ -10,6 +10,7 @@ host-suffix, apple-relay.mask.apple-dns.net, PROXY
 host-suffix, apple-relay.akamaized.net, PROXY
 host-suffix, cp4.cloudflare.com, PROXY
 host-suffix, cloud.com, PROXY
+host-suffix, push.apple.com, PROXY
 
 # OpenAI / ChatGPT (Apple Intelligence extension)
 host-suffix, chatgpt.com, PROXY
