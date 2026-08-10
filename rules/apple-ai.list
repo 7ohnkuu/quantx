@@ -3,7 +3,7 @@
 # Apple stays direct via blackmatrix7 -> 🍎 Apple (= direct in this config).
 # These host rules match BEFORE blackmatrix7, so its icloud.com/apple.com wildcards
 # cannot leak PCC traffic to China CDNs.
-host, gateway.icloud.com, PROXY
+host-suffix, gateway.icloud.com, PROXY
 host-keyword, p152-, PROXY
 host, p196-acsegateway.icloud.com, PROXY
 host, gdmf.apple.com, PROXY
@@ -22,6 +22,7 @@ host-suffix, cloud.com, PROXY
 host-suffix, push.apple.com, PROXY
 
 # PCC Mask / attestation (from RocM301 Apple-AI.list)
+host-keyword, siri, PROXY
 host, mask-api.fe.apple-dns.net, PROXY
 host, mask-api.icloud.com, PROXY
 host, mask-t.apple-dns.net, PROXY
