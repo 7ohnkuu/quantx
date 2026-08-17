@@ -21,6 +21,12 @@ host-suffix, cp4.cloudflare.com, PROXY
 host-suffix, cloud.com, PROXY
 host-suffix, push.apple.com, PROXY
 
+# Observed in PacketTunnel-20260817214508.log: Apple Intelligence enablement
+# traffic routed via 🇺🇸 美国 Cox [2x] (push/ls/apple-relay already covered above)
+host, amp-api.apps.apple.com, PROXY
+host, amp-api-edge.apps.apple.com, PROXY
+host, amp-api-search-edge.apps.apple.com, PROXY
+
 # PCC Mask / attestation (from RocM301 Apple-AI.list)
 host-keyword, siri, PROXY
 host, mask-api.fe.apple-dns.net, PROXY
