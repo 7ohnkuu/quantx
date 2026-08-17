@@ -1,39 +1,39 @@
 # Must be placed BEFORE blackmatrix7 Apple rules in [filter]
-host-suffix, gateway.icloud.com, 🤖 AI Platforms
-host-keyword, p152-, 🤖 AI Platforms
-host, p196-acsegateway.icloud.com, 🤖 AI Platforms
-host, gdmf.apple.com, 🤖 AI Platforms
-host, gdmf-ados.apple.com, 🤖 AI Platforms
-host, guzzoni.apple.com, 🤖 AI Platforms
-host-suffix, ls.apple.com, 🤖 AI Platforms
-host-suffix, smoot.apple.com, 🤖 AI Platforms
-host-suffix, apple-relay.apple.com, 🤖 AI Platforms
-host-suffix, apple-relay.cloudflare.com, 🤖 AI Platforms
-host-suffix, apple-relay.fastly-edge.com, 🤖 AI Platforms
-host-suffix, apple-relay.mask.apple-dns.net, 🤖 AI Platforms
-host-suffix, apple-relay.akamaized.net, 🤖 AI Platforms
-host-suffix, cp4.cloudflare.com, 🤖 AI Platforms
-host-suffix, cloud.com, 🤖 AI Platforms
-host-suffix, push.apple.com, 🤖 AI Platforms
-host, amp-api.apps.apple.com, 🤖 AI Platforms
-host, amp-api-edge.apps.apple.com, 🤖 AI Platforms
-host, amp-api-search-edge.apps.apple.com, 🤖 AI Platforms
-host, xp.apple.com, 🤖 AI Platforms
-host, gsra.apple.com, 🤖 AI Platforms
-host, bag.itunes.apple.com, 🤖 AI Platforms
-host, amp-account.itunes.apple.com, 🤖 AI Platforms
-host, speedysub.itunes.apple.com, 🤖 AI Platforms
-host, updates.cdn-apple.com, 🤖 AI Platforms
-host-keyword, siri, 🤖 AI Platforms
-host, mask-api.fe.apple-dns.net, 🤖 AI Platforms
-host, mask-api.icloud.com, 🤖 AI Platforms
-host, mask-t.apple-dns.net, 🤖 AI Platforms
-host, mask.apple-dns.net, 🤖 AI Platforms
-host-suffix, mask-h2.icloud.com, 🤖 AI Platforms
-host-suffix, mask.icloud.com, 🤖 AI Platforms
-host-suffix, apps.mzstatic.com, 🤖 AI Platforms
-host-keyword, apple-wit, 🤖 AI Platforms
-host-suffix, apple-livephotos.com, 🤖 AI Platforms
-host, intelligence.apple.com, 🤖 AI Platforms
-host, madservices.apple.com, 🤖 AI Platforms
-host, blackbird.apple.com, 🤖 AI Platforms
+host-suffix, gateway.icloud.com, proxy
+host-keyword, p152-, proxy
+host, p196-acsegateway.icloud.com, proxy
+host, gdmf.apple.com, proxy
+host, gdmf-ados.apple.com, proxy
+host, guzzoni.apple.com, proxy
+host-suffix, ls.apple.com, proxy
+host-suffix, smoot.apple.com, proxy
+host-suffix, apple-relay.apple.com, proxy
+host-suffix, apple-relay.cloudflare.com, proxy
+host-suffix, apple-relay.fastly-edge.com, proxy
+host-suffix, apple-relay.mask.apple-dns.net, proxy
+host-suffix, apple-relay.akamaized.net, proxy
+host-suffix, cp4.cloudflare.com, proxy
+host-suffix, cloud.com, proxy
+host-suffix, push.apple.com, proxy
+host, amp-api.apps.apple.com, proxy
+host, amp-api-edge.apps.apple.com, proxy
+host, amp-api-search-edge.apps.apple.com, proxy
+host, xp.apple.com, proxy
+host, gsra.apple.com, proxy
+host, bag.itunes.apple.com, proxy
+host, amp-account.itunes.apple.com, proxy
+host, speedysub.itunes.apple.com, proxy
+host, updates.cdn-apple.com, proxy
+host-keyword, siri, proxy
+host, mask-api.fe.apple-dns.net, proxy
+host, mask-api.icloud.com, proxy
+host, mask-t.apple-dns.net, proxy
+host, mask.apple-dns.net, proxy
+host-suffix, mask-h2.icloud.com, proxy
+host-suffix, mask.icloud.com, proxy
+host-suffix, apps.mzstatic.com, proxy
+host-keyword, apple-wit, proxy
+host-suffix, apple-livephotos.com, proxy
+host, intelligence.apple.com, proxy
+host, madservices.apple.com, proxy
+host, blackbird.apple.com, proxy
