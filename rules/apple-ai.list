@@ -24,6 +24,12 @@ host-suffix, push.apple.com, PROXY
 host, amp-api.apps.apple.com, PROXY
 host, amp-api-edge.apps.apple.com, PROXY
 host, amp-api-search-edge.apps.apple.com, PROXY
+host, xp.apple.com, PROXY
+host, gsra.apple.com, PROXY
+host, bag.itunes.apple.com, PROXY
+host, amp-account.itunes.apple.com, PROXY
+host, speedysub.itunes.apple.com, PROXY
+host, updates.cdn-apple.com, PROXY
 
 # PCC Mask / attestation (from RocM301 Apple-AI.list)
 host-keyword, siri, PROXY
