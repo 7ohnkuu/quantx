@@ -29,7 +29,7 @@ https://raw.githubusercontent.com/7ohnkuu/quantx/main/rules/apple-ai.quantx.list
 | 脚本 | 作用 | Safari（隧道开启） |
 |---|---|---|
 | [`httpjs/network-info.js`](httpjs/network-info.js) | 直连 / 落地 IP、入口、SSID | http://httpjs.local/network |
-| [`httpjs/server-info.js`](httpjs/server-info.js) | IPPure 欺诈分、住宅 / 机房 | http://httpjs.local/risk |
+| [`httpjs/server-info.js`](httpjs/server-info.js) | 节点风险：ipapi.is + proxycheck + IPPure 交叉验证 | http://httpjs.local/risk |
 | [`httpjs/streaming-check.js`](httpjs/streaming-check.js) | 流媒体与 ChatGPT 解锁查询 | http://httpjs.local/stream |
 
 可选参数：`?policy=节点名`、`?format=json`。
