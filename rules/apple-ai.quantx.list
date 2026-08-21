@@ -4,6 +4,7 @@
 # ChatGPT extension used by Apple Intelligence. Avoid generic Apple wildcards.
 
 # Private Cloud Compute / attestation
+host, cp4.cloudflare.com, proxy
 host-suffix, gateway.icloud.com, proxy
 host, p196-acsegateway.icloud.com, proxy
 host-keyword, p152-, proxy
@@ -21,6 +22,7 @@ host-suffix, apple-relay.akamaized.net, proxy
 
 # Siri / Apple Intelligence service endpoints
 host, guzzoni.apple.com, proxy
+host-suffix, smoot.apple.com, proxy
 host, intelligence.apple.com, proxy
 host, madservices.apple.com, proxy
 host, blackbird.apple.com, proxy
