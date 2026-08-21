@@ -4,7 +4,8 @@
  * Rewrite of KOP-XIAO/streaming-ui-check.js:
  *   - Await every check before $done (original fired YouTube/DAZN/Paramount without waiting)
  *   - Drop duplicate $configuration.sendMessage
- *   - ChatGPT via cdn-cgi/trace
+ *   - ChatGPT uses live endpoint/WAF signals instead of a hardcoded country allowlist
+ *   - Unknown regions stay unknown instead of defaulting to US
  *   - HTTP Request and event-interaction
  *
  * [rewrite_local]
@@ -22,10 +23,6 @@ const TITLE = "Streaming Unlock";
 const NF_TITLE = "81280792";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-const GPT_COUNTRIES =
-  "AL DZ AD AO AG AR AM AU AT AZ BS BD BB BE BZ BJ BT BA BW BR BG BF CV CA CL CO KM CR HR CY DK DJ DM DO EC SV EE FJ FI FR GA GM GE DE GH GR GD GT GN GW GY HT HN HU IS IN ID IQ IE IL IT JM JP JO KZ KE KI KW KG LV LB LS LR LI LT LU MG MW MY MV ML MT MH MR MU MX MC MN ME MA MZ MM NA NR NP NL NZ NI NE NG MK NO OM PK PW PA PG PE PH PL PT QA RO RW KN LC VC WS SM ST SN RS SC SL SG SK SI SB ZA ES LK SR SE CH TH TG TO TT TN TR TV UG AE US UY VU ZM BO BN CG CZ VA FM MD PS KR TW TZ TL GB HK MO".split(
-    " "
-  );
 
 (async () => {
   const policy = policyName();
@@ -69,12 +66,12 @@ async function wrap(name, fn) {
 
 function formatText(r) {
   if (r.status === "available") {
-    return r.region ? "Yes ➟ " + flagEmoji(r.region) + " 🎉" : "Yes 🎉";
+    return r.region ? "Yes ➟ " + flagEmoji(r.region) + " " + r.region + " 🎉" : "Yes · region unknown 🎉";
   }
   if (r.status === "partial") {
-    return r.note || "Partial ⚠️";
+    return r.note || (r.region ? "Partial ➟ " + flagEmoji(r.region) + " " + r.region + " ⚠️" : "Partial / unknown ⚠️");
   }
-  if (r.status === "blocked") return "No 🚫";
+  if (r.status === "blocked") return r.region ? "No ➟ " + flagEmoji(r.region) + " " + r.region + " 🚫" : "No 🚫";
   if (r.status === "timeout") return "Timeout 🚦";
   return "Failed ❗️";
 }
@@ -92,29 +89,30 @@ async function checkYoutube(policy) {
   const body = String(resp.body || "");
   if (resp.statusCode !== 200) throw new Error("http");
   if (body.indexOf("Premium is not available in your country") !== -1) {
-    return { status: "blocked" };
+    return { status: "blocked", region: "" };
   }
   let region = "";
   const m = body.match(/"GL":"([A-Z]{2})"/);
   if (m) region = m[1];
   else if (body.indexOf("www.google.cn") !== -1) region = "CN";
-  else region = "US";
   return { status: "available", region: region };
 }
 
 async function checkNetflix(policy) {
   const resp = await qxFetch("https://www.netflix.com/title/" + NF_TITLE, { timeout: 8000, policy: policy });
   const code = resp.statusCode;
-  if (code === 403 || code === 451) return { status: "blocked" };
-  if (code === 404) return { status: "partial", note: "Originals only ⚠️" };
+  if (code === 403 || code === 451) return { status: "blocked", region: "" };
+  if (code === 404) return { status: "partial", region: "", note: "Originals only ⚠️" };
   if (code !== 200) throw new Error("http");
   const loc = headerOf(resp, "X-Originating-URL") || headerOf(resp, "Location") || "";
-  let region = "US";
+  let region = "";
   const m = loc.match(/netflix\.com\/([A-Za-z]{2})(?:-|\/)/);
   if (m) region = m[1].toUpperCase();
   else {
     const parts = loc.split("/");
-    if (parts[3] && parts[3] !== "title") region = parts[3].split("-")[0].toUpperCase();
+    if (parts[3] && parts[3] !== "title" && /^[A-Za-z]{2}(?:-|$)/.test(parts[3])) {
+      region = parts[3].split("-")[0].toUpperCase();
+    }
   }
   return { status: "available", region: region };
 }
@@ -123,7 +121,7 @@ async function checkDisney(policy) {
   const home = await qxFetch("https://www.disneyplus.com", { timeout: 8000, policy: policy });
   const body = String(home.body || "");
   if (home.statusCode !== 200 || body.indexOf("not available in your region") !== -1) {
-    return { status: "blocked" };
+    return { status: "blocked", region: "" };
   }
   let region = "";
   const m = body.match(/Region:\s*([A-Za-z]{2})/);
@@ -166,12 +164,11 @@ async function checkDisney(policy) {
     const loc = sdk && sdk.session && sdk.session.location;
     if (loc && loc.countryCode) region = String(loc.countryCode).toUpperCase();
     if (sdk && sdk.session && (sdk.session.inSupportedLocation === false || sdk.session.inSupportedLocation === "false")) {
-      return { status: "partial", region: region, note: "Coming soon ➟ " + flagEmoji(region) + " ⚠️" };
+      return { status: "partial", region: region, note: "Coming soon" + (region ? " ➟ " + flagEmoji(region) + " " + region : "") + " ⚠️" };
     }
   } catch (e) {
     console.log("disney graphql: " + e);
   }
-  if (!region) return { status: "available" };
   return { status: "available", region: region };
 }
 
@@ -192,7 +189,7 @@ async function checkDazn(policy) {
   });
   if (resp.statusCode !== 200) throw new Error("http");
   const m = String(resp.body || "").match(/"GeolocatedCountry"\s*:\s*"([A-Za-z]{2})"/);
-  if (!m) return { status: "blocked" };
+  if (!m) return { status: "partial", region: "", note: "Reachable · region unknown ⚠️" };
   return { status: "available", region: m[1].toUpperCase() };
 }
 
@@ -202,8 +199,16 @@ async function checkParamount(policy) {
     policy: policy,
     redirection: false,
   });
-  if (resp.statusCode === 200) return { status: "available", region: "US" };
-  if (resp.statusCode === 302 || resp.statusCode === 301) return { status: "blocked" };
+  if (resp.statusCode === 200) return { status: "available", region: "" };
+  if (resp.statusCode === 301 || resp.statusCode === 302 || resp.statusCode === 307 || resp.statusCode === 308) {
+    const target = headerOf(resp, "Location");
+    return {
+      status: "partial",
+      region: "",
+      note: target ? "Redirected · availability unknown ⚠️" : "Redirected · unknown ⚠️",
+    };
+  }
+  if (resp.statusCode === 403 || resp.statusCode === 451) return { status: "blocked", region: "" };
   throw new Error("http");
 }
 
@@ -214,7 +219,7 @@ async function checkDiscovery(policy) {
   );
   const tokenBody = parseJSON(tokenResp.body);
   const token = tokenBody && tokenBody.data && tokenBody.data.attributes && tokenBody.data.attributes.token;
-  if (!token) return { status: "blocked" };
+  if (!token) return { status: "partial", region: "", note: "Token unavailable · status unknown ⚠️" };
   const me = await qxFetch("https://us1-prod-direct.discoveryplus.com/users/me", {
     timeout: 8000,
     policy: policy,
@@ -223,25 +228,43 @@ async function checkDiscovery(policy) {
   });
   const data = parseJSON(me.body);
   const loc = data && data.data && data.data.attributes && data.data.attributes.currentLocationTerritory;
+  if (!loc) return { status: "partial", region: "", note: "Reachable · region unknown ⚠️" };
   if (String(loc).toLowerCase() === "us") return { status: "available", region: "US" };
-  return { status: "blocked" };
+  return { status: "blocked", region: String(loc).toUpperCase() };
 }
 
 async function checkChatGPT(policy) {
-  const urls = ["https://chatgpt.com/cdn-cgi/trace", "https://chat.openai.com/cdn-cgi/trace"];
+  const traceUrls = ["https://chatgpt.com/cdn-cgi/trace", "https://chat.openai.com/cdn-cgi/trace"];
   let loc = "";
-  for (let i = 0; i < urls.length; i++) {
+  for (let i = 0; i < traceUrls.length; i++) {
     try {
-      const resp = await qxFetch(urls[i], { timeout: 7000, policy: policy });
+      const resp = await qxFetch(traceUrls[i], { timeout: 7000, policy: policy });
       loc = (String(resp.body || "").match(/loc=([A-Z]{2})/) || [])[1] || "";
       if (loc) break;
     } catch (e) {
-      console.log("chatgpt " + urls[i] + " " + e);
+      console.log("chatgpt trace " + traceUrls[i] + " " + e);
     }
   }
-  if (!loc) throw new Error("http");
-  if (GPT_COUNTRIES.indexOf(loc) === -1) return { status: "blocked", region: loc };
-  return { status: "available", region: loc };
+
+  try {
+    const ios = await qxFetch("https://ios.chat.openai.com/", { timeout: 8000, policy: policy });
+    const body = String(ios.body || "");
+    const json = parseJSON(body) || {};
+    const type = String(json.type || "").toLowerCase();
+    if (type === "country" || /unsupported.?country|not available in (your )?(country|region)/i.test(body)) {
+      return { status: "blocked", region: loc };
+    }
+    if (ios.statusCode && ios.statusCode < 400) return { status: "available", region: loc };
+    if (ios.statusCode === 401) return { status: "available", region: loc };
+    if (ios.statusCode === 403 || type === "dc" || type === "datacenter" || type === "vpn" || type === "proxy") {
+      return { status: "partial", region: loc, note: "Endpoint reached · WAF/IP friction ⚠️" };
+    }
+  } catch (e) {
+    console.log("chatgpt ios endpoint " + e);
+  }
+
+  if (loc) return { status: "partial", region: loc, note: "Trace reachable · service status unknown ⚠️" };
+  throw new Error("http");
 }
 
 function headerOf(resp, name) {
