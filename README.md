@@ -33,7 +33,7 @@ https://raw.githubusercontent.com/7ohnkuu/quantx/main/rules/apple-ai.quantx.list
 |---|---|---|
 | [`network-info.js`](httpjs/network-info.js) | Direct / egress IP, ingress, SSID | http://httpjs.local/network |
 | [`server-info.js`](httpjs/server-info.js) | Node risk (ipapi.is + proxycheck + IPPure) | http://httpjs.local/risk |
-| [`streaming-check.js`](httpjs/streaming-check.js) | Streaming and ChatGPT reachability | http://httpjs.local/stream |
+| [`streaming-check.js`](httpjs/streaming-check.js) | Streaming service reachability | http://httpjs.local/stream |
 | [`speed-test.js`](httpjs/speed-test.js) | HTTP RTT, jitter, download, upload via Cloudflare | http://httpjs.local/speed |
 | [`ai-check.js`](httpjs/ai-check.js) | OpenAI / Anthropic / Gemini / Grok endpoint reachability + IP risk | http://httpjs.local/ai |
 | [`bank-check.js`](httpjs/bank-check.js) | BofA / Citi / Chase public-edge reachability + IP risk | http://httpjs.local/banks |
