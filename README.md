@@ -34,8 +34,9 @@ https://raw.githubusercontent.com/7ohnkuu/quantx/main/rules/apple-ai.quantx.list
 | [`server-info.js`](httpjs/server-info.js) | Node risk (ipapi.is + proxycheck + IPPure) | http://httpjs.local/risk |
 | [`streaming-check.js`](httpjs/streaming-check.js) | Streaming and ChatGPT unlock | http://httpjs.local/stream |
 | [`speed-test.js`](httpjs/speed-test.js) | Latency, jitter, download, upload via Cloudflare | http://httpjs.local/speed |
+| [`ai-check.js`](httpjs/ai-check.js) | OpenAI / Anthropic / Gemini / Grok APIs + IP risk | http://httpjs.local/ai |
 
-Long-press a node for the same tools (`[task_local]` tags: Network Info, Node Risk, Streaming Unlock, Speed Test).
+Long-press a node for the same tools (`[task_local]` tags: Network Info, Node Risk, Streaming Unlock, Speed Test, AI Models).
 
 ### Query parameters
 
@@ -46,7 +47,7 @@ Long-press a node for the same tools (`[task_local]` tags: Network Info, Node Ri
 | `size=2` | speed | Download size in MB (1–5, default 2) |
 | `pings=5` | speed | Latency samples (3–8) |
 | `noup=1` | speed | Skip upload |
-| `ipapi_key=` / `pc_key=` | risk | Optional keys for higher quota |
+| `ipapi_key=` / `pc_key=` | risk, ai | Optional keys for higher quota |
 
 Example: `http://httpjs.local/speed?policy=NodeName&size=5`
 
