@@ -1,39 +1,48 @@
-# Must be placed BEFORE blackmatrix7 Apple rules in [filter]
+# Apple Intelligence / Siri / Private Cloud Compute
+# Quantumult X filter list. Place BEFORE broad Apple direct rules.
+# Scope is intentionally narrow: PCC/Siri/Apple Intelligence plus the
+# ChatGPT extension used by Apple Intelligence. Avoid generic Apple wildcards.
+
+# Private Cloud Compute / attestation
 host-suffix, gateway.icloud.com, proxy
-host-keyword, p152-, proxy
 host, p196-acsegateway.icloud.com, proxy
-host, gdmf.apple.com, proxy
-host, gdmf-ados.apple.com, proxy
-host, guzzoni.apple.com, proxy
-host-suffix, ls.apple.com, proxy
-host-suffix, smoot.apple.com, proxy
-host-suffix, apple-relay.apple.com, proxy
-host-suffix, apple-relay.cloudflare.com, proxy
-host-suffix, apple-relay.fastly-edge.com, proxy
-host-suffix, apple-relay.mask.apple-dns.net, proxy
-host-suffix, apple-relay.akamaized.net, proxy
-host-suffix, cp4.cloudflare.com, proxy
-host-suffix, cloud.com, proxy
-host-suffix, push.apple.com, proxy
-host, amp-api.apps.apple.com, proxy
-host, amp-api-edge.apps.apple.com, proxy
-host, amp-api-search-edge.apps.apple.com, proxy
-host, xp.apple.com, proxy
-host, gsra.apple.com, proxy
-host, bag.itunes.apple.com, proxy
-host, amp-account.itunes.apple.com, proxy
-host, speedysub.itunes.apple.com, proxy
-host, updates.cdn-apple.com, proxy
-host-keyword, siri, proxy
+host-keyword, p152-, proxy
 host, mask-api.fe.apple-dns.net, proxy
 host, mask-api.icloud.com, proxy
 host, mask-t.apple-dns.net, proxy
 host, mask.apple-dns.net, proxy
 host-suffix, mask-h2.icloud.com, proxy
 host-suffix, mask.icloud.com, proxy
-host-suffix, apps.mzstatic.com, proxy
-host-keyword, apple-wit, proxy
-host-suffix, apple-livephotos.com, proxy
+host-suffix, apple-relay.apple.com, proxy
+host-suffix, apple-relay.cloudflare.com, proxy
+host-suffix, apple-relay.fastly-edge.com, proxy
+host-suffix, apple-relay.mask.apple-dns.net, proxy
+host-suffix, apple-relay.akamaized.net, proxy
+
+# Siri / Apple Intelligence service endpoints
+host, guzzoni.apple.com, proxy
 host, intelligence.apple.com, proxy
 host, madservices.apple.com, proxy
 host, blackbird.apple.com, proxy
+host-keyword, apple-wit, proxy
+host-suffix, apple-livephotos.com, proxy
+
+# Device / account capability and model availability checks observed in
+# Apple Intelligence enablement flows
+host, gdmf.apple.com, proxy
+host, gdmf-ados.apple.com, proxy
+host, xp.apple.com, proxy
+host, gsra.apple.com, proxy
+host, bag.itunes.apple.com, proxy
+host, amp-account.itunes.apple.com, proxy
+host, speedysub.itunes.apple.com, proxy
+host, updates.cdn-apple.com, proxy
+host, amp-api.apps.apple.com, proxy
+host, amp-api-edge.apps.apple.com, proxy
+host, amp-api-search-edge.apps.apple.com, proxy
+
+# ChatGPT extension used by Apple Intelligence
+host-suffix, chatgpt.com, proxy
+host-suffix, openai.com, proxy
+host-suffix, oaistatic.com, proxy
+host-suffix, oaiusercontent.com, proxy
