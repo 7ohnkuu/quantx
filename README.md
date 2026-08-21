@@ -24,13 +24,14 @@ https://raw.githubusercontent.com/7ohnkuu/quantx/main/rules/apple-ai.quantx.list
 
 ## HTTP 脚本
 
-把下面三个文件复制到 **Quantumult X → Scripts**，再把 [`httpjs/qx-http-request.conf`](httpjs/qx-http-request.conf) 合并进配置。
+把下面文件复制到 **Quantumult X → Scripts**，再把 [`httpjs/qx-http-request.conf`](httpjs/qx-http-request.conf) 合并进配置。
 
 | 脚本 | 作用 | Safari（隧道开启） |
 |---|---|---|
 | [`httpjs/network-info.js`](httpjs/network-info.js) | 直连 / 落地 IP、入口、SSID | http://httpjs.local/network |
 | [`httpjs/server-info.js`](httpjs/server-info.js) | 节点风险：ipapi.is + proxycheck + IPPure 交叉验证 | http://httpjs.local/risk |
 | [`httpjs/streaming-check.js`](httpjs/streaming-check.js) | 流媒体与 ChatGPT 解锁查询 | http://httpjs.local/stream |
+| [`httpjs/speed-test.js`](httpjs/speed-test.js) | 节点测速：延迟 / 抖动 / 下载 / 上传（Cloudflare） | http://httpjs.local/speed |
 
 可选参数：`?policy=节点名`、`?format=json`。
 
