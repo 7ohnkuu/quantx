@@ -2,6 +2,7 @@
  * Network Info — Quantumult X
  *
  * Rewrite of xream/net-lsp-x.js: QX only, no Surge/Loon/Stash/Env layer.
+ * Uses HTTPS-only geo lookups.
  * Modes:
  *   1. HTTP Request (script-echo-response): open http://httpjs.local/network
  *   2. event-interaction: long-press a node → Network Info
@@ -27,11 +28,11 @@ const UA =
   const ssid = wifiName();
 
   const [direct, land] = await Promise.all([
-    firstOk([() => lookupIpip("direct"), () => lookupIpApi("", "direct")]).catch((e) => ({
+    firstOk([() => lookupIpip("direct"), () => lookupIpwho("", "direct")]).catch((e) => ({
       ip: "",
       error: String(e && e.message ? e.message : e),
     })),
-    firstOk([() => lookupIpApi("", policy), () => lookupIpwho("", policy)]).catch((e) => ({
+    lookupIpwho("", policy).catch((e) => ({
       ip: "",
       error: String(e && e.message ? e.message : e),
     })),
@@ -43,7 +44,7 @@ const UA =
     entrance = { ip: host };
   } else if (host && isIP(host) && host !== land.ip) {
     try {
-      entrance = await firstOk([() => lookupIpApi(host, "direct"), () => lookupIpwho(host, "")]);
+      entrance = await lookupIpwho(host, "direct");
     } catch (e) {
       entrance = { ip: host };
     }
@@ -77,60 +78,39 @@ const UA =
 
 function formatWhere(info) {
   if (!info) return "";
-  const parts = [flagEmoji(info.cc), info.country, info.region, info.city].filter(function (x) {
-    return x;
-  });
+  const parts = [flagEmoji(info.cc), info.country, info.region, info.city].filter(Boolean);
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 async function lookupIpip(policy) {
   const resp = await qxFetch("https://myip.ipip.net/json", { timeout: 6000, policy: policy });
   const body = parseJSON(resp.body);
-  if (!body || body.ret !== "ok") throw new Error("ipip lookup failed");
-  const loc = (body.data && body.data.location) || [];
+  if (!body || body.ret !== "ok" || !body.data || !body.data.ip) throw new Error("ipip lookup failed");
   const ip = body.data.ip;
-  const cc = loc[0] === "\u4e2d\u56fd" ? "CN" : "";
   try {
-    return await lookupIpApi(ip, "direct");
+    return await lookupIpwho(ip, "direct");
   } catch (e) {
+    const loc = body.data.location || [];
+    const cc = loc[0] === "中国" ? "CN" : "";
     return {
       ip: ip,
       country: cc === "CN" ? "China" : "",
       region: "",
       city: "",
       isp: "",
+      org: "",
+      as: "",
       cc: cc,
       source: "ipip",
     };
   }
 }
 
-async function lookupIpApi(ip, policy) {
-  const path = ip ? "/" + encodeURIComponent(ip) : "";
-  const resp = await qxFetch("http://ip-api.com/json" + path, {
-    timeout: 8000,
-    policy: policy,
-  });
-  const body = parseJSON(resp.body);
-  if (!body || body.status !== "success") throw new Error((body && body.message) || "ip-api lookup failed");
-  return {
-    ip: body.query,
-    country: body.country || "",
-    region: body.regionName || "",
-    city: body.city || "",
-    isp: body.isp || "",
-    org: body.org || "",
-    as: body.as || "",
-    cc: body.countryCode || "",
-    source: "ip-api",
-  };
-}
-
 async function lookupIpwho(ip, policy) {
   const path = ip ? "/" + encodeURIComponent(ip) : "";
   const resp = await qxFetch("https://ipwho.is" + path, { timeout: 8000, policy: policy });
   const body = parseJSON(resp.body);
-  if (!body || body.success === false) throw new Error((body && body.message) || "ipwho.is lookup failed");
+  if (!body || body.success === false || !body.ip) throw new Error((body && body.message) || "ipwho.is lookup failed");
   const conn = body.connection || {};
   return {
     ip: body.ip,
@@ -139,7 +119,7 @@ async function lookupIpwho(ip, policy) {
     city: body.city || "",
     isp: conn.isp || conn.org || "",
     org: conn.org || "",
-    as: conn.asn ? "AS" + conn.asn : "",
+    as: conn.asn ? "AS" + conn.asn + (conn.org ? " " + conn.org : "") : "",
     cc: body.country_code || "",
     source: "ipwho.is",
   };
