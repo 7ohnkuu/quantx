@@ -4,7 +4,6 @@
  * Rewrite of KOP-XIAO/streaming-ui-check.js:
  *   - Await every check before $done (original fired YouTube/DAZN/Paramount without waiting)
  *   - Drop duplicate $configuration.sendMessage
- *   - ChatGPT uses live endpoint/WAF signals instead of a hardcoded country allowlist
  *   - Unknown regions stay unknown instead of defaulting to US
  *   - HTTP Request and event-interaction
  *
@@ -34,7 +33,6 @@ const UA =
     wrap("DAZN", () => checkDazn(policy)),
     wrap("Paramount+", () => checkParamount(policy)),
     wrap("Discovery+", () => checkDiscovery(policy)),
-    wrap("ChatGPT", () => checkChatGPT(policy)),
   ]);
 
   const items = results.map((r) => ({
@@ -231,40 +229,6 @@ async function checkDiscovery(policy) {
   if (!loc) return { status: "partial", region: "", note: "Reachable · region unknown ⚠️" };
   if (String(loc).toLowerCase() === "us") return { status: "available", region: "US" };
   return { status: "blocked", region: String(loc).toUpperCase() };
-}
-
-async function checkChatGPT(policy) {
-  const traceUrls = ["https://chatgpt.com/cdn-cgi/trace", "https://chat.openai.com/cdn-cgi/trace"];
-  let loc = "";
-  for (let i = 0; i < traceUrls.length; i++) {
-    try {
-      const resp = await qxFetch(traceUrls[i], { timeout: 7000, policy: policy });
-      loc = (String(resp.body || "").match(/loc=([A-Z]{2})/) || [])[1] || "";
-      if (loc) break;
-    } catch (e) {
-      console.log("chatgpt trace " + traceUrls[i] + " " + e);
-    }
-  }
-
-  try {
-    const ios = await qxFetch("https://ios.chat.openai.com/", { timeout: 8000, policy: policy });
-    const body = String(ios.body || "");
-    const json = parseJSON(body) || {};
-    const type = String(json.type || "").toLowerCase();
-    if (type === "country" || /unsupported.?country|not available in (your )?(country|region)/i.test(body)) {
-      return { status: "blocked", region: loc };
-    }
-    if (ios.statusCode && ios.statusCode < 400) return { status: "available", region: loc };
-    if (ios.statusCode === 401) return { status: "available", region: loc };
-    if (ios.statusCode === 403 || type === "dc" || type === "datacenter" || type === "vpn" || type === "proxy") {
-      return { status: "partial", region: loc, note: "Endpoint reached · WAF/IP friction ⚠️" };
-    }
-  } catch (e) {
-    console.log("chatgpt ios endpoint " + e);
-  }
-
-  if (loc) return { status: "partial", region: loc, note: "Trace reachable · service status unknown ⚠️" };
-  throw new Error("http");
 }
 
 function headerOf(resp, name) {
