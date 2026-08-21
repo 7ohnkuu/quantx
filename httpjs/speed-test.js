@@ -1,7 +1,9 @@
 /**
  * Speed Test — Quantumult X
  *
- * Measure a node against Cloudflare: latency / jitter / download / upload.
+ * Measure a node against Cloudflare: HTTP RTT / jitter / download / upload.
+ * Download throughput uses Content-Length when available, then response-body
+ * byte length, and only falls back to the requested byte count as an estimate.
  *
  * [rewrite_local]
  * ^http://httpjs\.local/speed url script-echo-response speed-test.js
@@ -12,7 +14,7 @@
  * Query:
  *   ?policy=NodeName
  *   ?size=2          download MB, default 2, max 5
- *   ?pings=5         latency samples, default 5
+ *   ?pings=5         HTTP RTT samples, default 5
  *   ?noup=1          skip upload
  *   ?format=json
  */
@@ -29,7 +31,7 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
   const policy = policyName();
   const q = query();
   const nodeLabel = await policyChain(policy);
-  const downBytes = parseSizeMB(q.size) * 1000 * 1000;
+  const requestedDownBytes = parseSizeMB(q.size) * 1000 * 1000;
   const pingCount = clampInt(q.pings, 5, 3, 8);
   const skipUp = q.noup === "1" || q.noup === "true";
   const upBytes = 256 * 1000;
@@ -40,21 +42,21 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
 
   const pingMs = [];
   const pingErrors = [];
-  for (var i = 0; i < pingCount; i++) {
+  for (let i = 0; i < pingCount; i++) {
     const p = await timedFetch(pingUrl, { policy: policy, timeout: 6000 });
     if (p.ok) pingMs.push(p.ms);
     else pingErrors.push(p.error || "fail");
   }
-  if (!pingMs.length) throw new Error("latency test failed" + (pingErrors[0] ? ": " + pingErrors[0] : ""));
+  if (!pingMs.length) throw new Error("HTTP RTT test failed" + (pingErrors[0] ? ": " + pingErrors[0] : ""));
   const st = stats(pingMs);
 
-  const downTimeout = Math.min(25000, Math.max(12000, Math.round(downBytes / 1000) + 8000));
-  const down = await timedFetch(DOWN_URL + downBytes, { policy: policy, timeout: downTimeout });
-  const downSize = down.ok ? downBytes : 0;
-  const downMbps = down.ok ? toMbps(downSize, down.ms) : 0;
+  const downTimeout = Math.min(25000, Math.max(12000, Math.round(requestedDownBytes / 1000) + 8000));
+  const down = await timedFetch(DOWN_URL + requestedDownBytes, { policy: policy, timeout: downTimeout });
+  const measured = down.ok ? responseByteCount(down, requestedDownBytes) : { bytes: 0, source: "none", estimated: false };
+  const downMbps = down.ok ? toMbps(measured.bytes, down.ms) : 0;
 
-  var up = null;
-  var upMbps = 0;
+  let up = null;
+  let upMbps = 0;
   if (!skipUp) {
     up = await timedFetch(UP_URL, {
       policy: policy,
@@ -73,7 +75,7 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
 
   const items = [
     {
-      key: "Latency",
+      key: "HTTP RTT",
       value: Math.round(st.avg) + " ms",
       html: pingHtml(st.avg),
     },
@@ -83,25 +85,27 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
     },
     {
       key: "Download",
-      value: down.ok ? fmtMbps(downMbps) : "Failed " + (down.error || ""),
+      value: down.ok ? (measured.estimated ? "~" : "") + fmtMbps(downMbps) : "Failed " + (down.error || ""),
       html: down.ok
-        ? speedHtml(downMbps)
+        ? speedHtml(downMbps, measured.estimated)
         : '<font color="#dc3545">' + escapeHtml("Failed " + (down.error || "")) + "</font>",
     },
   ];
   if (!skipUp) {
     items.push({
       key: "Upload",
-      value: up && up.ok ? fmtMbps(upMbps) : "Failed " + ((up && up.error) || ""),
+      value: up && up.ok ? "~" + fmtMbps(upMbps) : "Failed " + ((up && up.error) || ""),
       html:
         up && up.ok
-          ? speedHtml(upMbps)
+          ? speedHtml(upMbps, true)
           : '<font color="#dc3545">' + escapeHtml("Failed " + ((up && up.error) || "")) + "</font>",
     });
   }
   items.push({
     key: "Transfer",
-    value: down.ok ? fmtBytes(downSize) + " · " + (down.ms / 1000).toFixed(2) + " s" : "",
+    value: down.ok
+      ? fmtBytes(measured.bytes) + " · " + (down.ms / 1000).toFixed(2) + " s · " + measured.source
+      : "",
   });
   if (trace.colo || trace.loc) {
     items.push({
@@ -111,20 +115,36 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
   }
   if (trace.ip) items.push({ key: "Egress IP", value: trace.ip });
   items.push({
-    key: "Samples",
-    value: pingMs.map(function (ms) {
-      return Math.round(ms);
-    }).join(" / ") + " ms",
+    key: "RTT samples",
+    value: pingMs.map((ms) => Math.round(ms)).join(" / ") + " ms",
   });
 
   doneOK(TITLE, items, {
     node: nodeLabel || policy || "current policy",
     json: {
       policy: policy,
-      ping: st,
+      httpRtt: st,
       pingMs: pingMs,
-      download: { ok: down.ok, bytes: downSize, ms: down.ms, mbps: round2(downMbps), error: down.error || "" },
-      upload: skipUp ? null : { ok: !!(up && up.ok), bytes: upBytes, ms: up ? up.ms : 0, mbps: round2(upMbps), error: (up && up.error) || "" },
+      download: {
+        ok: down.ok,
+        requestedBytes: requestedDownBytes,
+        measuredBytes: measured.bytes,
+        measurementSource: measured.source,
+        estimated: measured.estimated,
+        ms: down.ms,
+        mbps: round2(downMbps),
+        error: down.error || "",
+      },
+      upload: skipUp
+        ? null
+        : {
+            ok: !!(up && up.ok),
+            bytes: upBytes,
+            estimated: true,
+            ms: up ? up.ms : 0,
+            mbps: round2(upMbps),
+            error: (up && up.error) || "",
+          },
       cloudflare: trace,
     },
   });
@@ -149,7 +169,7 @@ function parseTrace(text) {
   const o = {};
   String(text || "")
     .split("\n")
-    .forEach(function (line) {
+    .forEach((line) => {
       const i = line.indexOf("=");
       if (i > 0) o[line.slice(0, i).trim()] = line.slice(i + 1).trim();
     });
@@ -157,19 +177,40 @@ function parseTrace(text) {
 }
 
 function stats(list) {
-  const a = list.slice().sort(function (x, y) {
-    return x - y;
-  });
-  var sum = 0;
-  for (var i = 0; i < a.length; i++) sum += a[i];
-  var jit = 0;
-  for (var j = 1; j < list.length; j++) jit += Math.abs(list[j] - list[j - 1]);
+  const a = list.slice().sort((x, y) => x - y);
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += a[i];
+  let jit = 0;
+  for (let j = 1; j < list.length; j++) jit += Math.abs(list[j] - list[j - 1]);
   return {
     min: a[0],
     max: a[a.length - 1],
     avg: sum / a.length,
     jitter: list.length > 1 ? jit / (list.length - 1) : 0,
   };
+}
+
+function responseByteCount(resp, requested) {
+  const len = Number(headerOf(resp.headers, "content-length"));
+  if (isFinite(len) && len > 0) return { bytes: len, source: "Content-Length", estimated: false };
+  const bodyBytes = byteLength(resp.body);
+  if (bodyBytes > 0) return { bytes: bodyBytes, source: "response body", estimated: false };
+  return { bytes: requested, source: "requested bytes", estimated: true };
+}
+
+function headerOf(headers, name) {
+  const h = headers || {};
+  const hit = Object.keys(h).find((k) => k.toLowerCase() === String(name).toLowerCase());
+  return hit ? String(h[hit]) : "";
+}
+
+function byteLength(text) {
+  const s = String(text == null ? "" : text);
+  try {
+    return unescape(encodeURIComponent(s)).length;
+  } catch (e) {
+    return s.length;
+  }
 }
 
 function toMbps(bytes, ms) {
@@ -179,8 +220,7 @@ function toMbps(bytes, ms) {
 
 function fmtMbps(n) {
   if (!isFinite(n) || n <= 0) return "0 Mbps";
-  const s = n >= 10 ? n.toFixed(1) : n.toFixed(2);
-  return s + " Mbps";
+  return (n >= 10 ? n.toFixed(1) : n.toFixed(2)) + " Mbps";
 }
 
 function fmtBytes(n) {
@@ -194,21 +234,21 @@ function round2(n) {
 }
 
 function padBytes(n) {
-  var s = "0123456789abcdef0123456789abcdef";
+  let s = "0123456789abcdef0123456789abcdef";
   while (s.length < n) s += s;
   return s.slice(0, n);
 }
 
-function speedHtml(mbps) {
-  var color = "#dc3545";
+function speedHtml(mbps, estimated) {
+  let color = "#dc3545";
   if (mbps >= 30) color = "#28a745";
   else if (mbps >= 10) color = "#ca8a04";
   else if (mbps >= 3) color = "#ff8c00";
-  return '<font color="' + color + '">' + escapeHtml(fmtMbps(mbps)) + "</font>";
+  return '<font color="' + color + '">' + escapeHtml((estimated ? "~" : "") + fmtMbps(mbps)) + "</font>";
 }
 
 function pingHtml(ms) {
-  var color = "#dc3545";
+  let color = "#dc3545";
   if (ms <= 80) color = "#28a745";
   else if (ms <= 150) color = "#ca8a04";
   else if (ms <= 250) color = "#ff8c00";
@@ -222,11 +262,23 @@ async function timedFetch(url, opt) {
     const ms = Date.now() - t0;
     const code = resp && (resp.statusCode || resp.status);
     if (!resp || (code && code >= 400)) {
-      return { ok: false, ms: ms, error: "HTTP " + (code || "0"), body: "" };
+      return { ok: false, ms: ms, error: "HTTP " + (code || "0"), body: "", headers: {} };
     }
-    return { ok: true, ms: ms, status: code, body: (resp && resp.body) || "" };
+    return {
+      ok: true,
+      ms: ms,
+      status: code,
+      body: (resp && resp.body) || "",
+      headers: (resp && resp.headers) || {},
+    };
   } catch (e) {
-    return { ok: false, ms: Date.now() - t0, error: String(e && e.message ? e.message : e), body: "" };
+    return {
+      ok: false,
+      ms: Date.now() - t0,
+      error: String(e && e.message ? e.message : e),
+      body: "",
+      headers: {},
+    };
   }
 }
 

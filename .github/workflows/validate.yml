@@ -1,0 +1,29 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  syntax-and-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check standalone JavaScript syntax
+        run: |
+          for file in httpjs/*.js; do
+            node --check "$file"
+          done
+
+      - name: Check rule and reliability invariants
+        shell: bash
+        run: |
+          test ! -e rules/apple-ai.list
+          ! grep -R "http://ip-api.com" httpjs
+          ! grep -R -E "GPT_COUNTRIES|OPENAI_OK|accounts may be banned|expect step-up auth or lockouts" httpjs
+          ! grep -E '^[[:space:]]*host-keyword,[[:space:]]*siri|^[[:space:]]*host-suffix,[[:space:]]*cloud\.com|^[[:space:]]*host-suffix,[[:space:]]*push\.apple\.com|^[[:space:]]*host-suffix,[[:space:]]*apps\.mzstatic\.com' rules/apple-ai.quantx.list

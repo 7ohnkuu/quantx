@@ -4,7 +4,7 @@
 
 Quantumult X rules and HTTP Request scripts.
 
-- **Rules:** Send Apple Intelligence / Siri / Private Cloud Compute hosts through the proxy so generic Apple lists cannot leak them to mainland CDNs.
+- **Rules:** Route Apple Intelligence / Siri / Private Cloud Compute traffic through the proxy without sending broad Apple traffic through the same policy.
 - **Scripts:** Local `script-echo-response` tools that also work as node long-press actions.
 
 ## Rules
@@ -12,9 +12,10 @@ Quantumult X rules and HTTP Request scripts.
 | File | Format |
 |---|---|
 | [`rules/apple-ai.quantx.list`](rules/apple-ai.quantx.list) | Quantumult X `[filter_remote]` |
-| [`rules/apple-ai.list`](rules/apple-ai.list) | Surge / Clash style (policy `PROXY`) |
 
-Place this list **before** broad Apple rules such as blackmatrix7. Otherwise `icloud.com` / `apple.com` wildcards send PCC traffic direct.
+The Apple Intelligence list is intentionally scoped to PCC/Siri/Apple Intelligence endpoints plus the ChatGPT extension. It avoids broad rules such as `host-keyword,siri`, `cloud.com`, `push.apple.com`, and `apps.mzstatic.com` that can capture unrelated Apple traffic.
+
+Place this list **before** broad Apple rules such as blackmatrix7. Otherwise generic `icloud.com` / `apple.com` rules may send PCC traffic direct.
 
 Quantumult X remote filter:
 
@@ -32,10 +33,10 @@ https://raw.githubusercontent.com/7ohnkuu/quantx/main/rules/apple-ai.quantx.list
 |---|---|---|
 | [`network-info.js`](httpjs/network-info.js) | Direct / egress IP, ingress, SSID | http://httpjs.local/network |
 | [`server-info.js`](httpjs/server-info.js) | Node risk (ipapi.is + proxycheck + IPPure) | http://httpjs.local/risk |
-| [`streaming-check.js`](httpjs/streaming-check.js) | Streaming and ChatGPT unlock | http://httpjs.local/stream |
-| [`speed-test.js`](httpjs/speed-test.js) | Latency, jitter, download, upload via Cloudflare | http://httpjs.local/speed |
-| [`ai-check.js`](httpjs/ai-check.js) | OpenAI / Anthropic / Gemini / Grok APIs + IP risk | http://httpjs.local/ai |
-| [`bank-check.js`](httpjs/bank-check.js) | BofA / Citi / Chase reachability + IP risk | http://httpjs.local/banks |
+| [`streaming-check.js`](httpjs/streaming-check.js) | Streaming and ChatGPT reachability | http://httpjs.local/stream |
+| [`speed-test.js`](httpjs/speed-test.js) | HTTP RTT, jitter, download, upload via Cloudflare | http://httpjs.local/speed |
+| [`ai-check.js`](httpjs/ai-check.js) | OpenAI / Anthropic / Gemini / Grok endpoint reachability + IP risk | http://httpjs.local/ai |
+| [`bank-check.js`](httpjs/bank-check.js) | BofA / Citi / Chase public-edge reachability + IP risk | http://httpjs.local/banks |
 
 Long-press a node for the same tools (`[task_local]` tags: Network Info, Node Risk, Streaming Unlock, Speed Test, AI Models, US Banks).
 
@@ -46,13 +47,21 @@ Long-press a node for the same tools (`[task_local]` tags: Network Info, Node Ri
 | `policy=NodeName` | all | Force that node (same as a long-press) |
 | `format=json` | all | JSON instead of HTML |
 | `size=2` | speed | Download size in MB (1–5, default 2) |
-| `pings=5` | speed | Latency samples (3–8) |
+| `pings=5` | speed | HTTP RTT samples (3–8) |
 | `noup=1` | speed | Skip upload |
-| `ipapi_key=` / `pc_key=` | risk, ai, banks | Optional keys for higher quota |
+| `ipapi_key=` / `pc_key=` | risk, ai, banks | Optional keys for higher quota; prefer task arguments over saving keys in browser history |
 
 Example: `http://httpjs.local/speed?policy=NodeName&size=5`
 
 [`httpjs/sample.txt`](httpjs/sample.txt) is the original remote `event-interaction` sample. [`httpjs/original/`](httpjs/original/) holds upstream snapshots (their comments stay as published).
+
+## Interpretation
+
+These scripts are network diagnostics, not account-level guarantees:
+
+- An authentication error from an AI API proves the endpoint/authentication layer is reachable; it does not prove a real account and API key will be accepted.
+- Bank checks only test public login edges and WAF responses; they cannot predict internal fraud scoring, step-up authentication, or account lockouts.
+- Unknown or unparseable streaming regions should be treated as unknown rather than assumed to be US.
 
 ## License
 

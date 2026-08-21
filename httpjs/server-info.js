@@ -1,12 +1,11 @@
 /**
  * Node Risk — Quantumult X
  *
- * Do not trust IPPure alone. Query in parallel:
- *   - ipapi.is       datacenter / VPN / proxy / Tor / abuser (free, no key)
- *   - proxycheck.io  VPN/proxy type + 0–100 risk (free, no key)
- *   - IPPure         fraud score (lowest weight; often under-rates hosting/VPN)
- *
- * Weighted consensus score, with each source shown so disagreements stay visible.
+ * HTTPS-only multi-source IP reputation:
+ *   - ipapi.is       datacenter / VPN / proxy / Tor / abuser
+ *   - proxycheck.io  VPN/proxy type + risk
+ *   - IPPure         fraud score (lowest weight)
+ *   - ipwho.is       geo / ASN fallback only
  *
  * [rewrite_local]
  * ^http://httpjs\.local/risk url script-echo-response server-info.js
@@ -17,12 +16,12 @@
  * Query:
  *   ?policy=NodeName
  *   ?format=json
- *   ?ipapi_key=  ?pc_key=   optional, higher quota
+ *   ?ipapi_key=  ?pc_key=
  */
 
 const TITLE = "Node Risk";
 const UA =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
 (async () => {
   const policy = policyName();
@@ -31,19 +30,17 @@ const UA =
 
   const pIpapi = lookupIpapiIs(policy, q.ipapi_key);
   const pPure = lookupIppure(policy);
-  const pGeo = lookupIpApi(policy);
+  const pGeo = lookupIpwho("", policy);
   const ip = await firstIp([pIpapi, pPure, pGeo]);
-  const pPc = ip ? lookupProxycheck(ip, policy, q.pc_key || q.proxycheck_key) : Promise.resolve(failReport("proxycheck", "no IP"));
+  const pPc = ip
+    ? lookupProxycheck(ip, policy, q.pc_key || q.proxycheck_key)
+    : Promise.resolve(failReport("proxycheck", "no IP"));
 
   const reports = settleReports(await Promise.allSettled([pIpapi, pPc, pPure, pGeo]));
   const verdict = summarize(reports);
   if (!verdict.ip) throw new Error("all sources failed");
 
-  const loc = [flagEmoji(verdict.cc), verdict.cc, verdict.region, verdict.city]
-    .filter(function (x) {
-      return x;
-    })
-    .join(" - ");
+  const loc = [flagEmoji(verdict.cc), verdict.cc, verdict.region, verdict.city].filter(Boolean).join(" - ");
   const risk = riskLevel(verdict.score);
   const items = [
     { key: "IP", value: verdict.ip },
@@ -83,18 +80,18 @@ function failReport(source, error) {
 }
 
 function settleReports(settled) {
+  const names = ["ipapi.is", "proxycheck", "IPPure", "ipwho.is"];
   return settled.map(function (s, i) {
     if (s.status === "fulfilled" && s.value) return s.value;
-    const names = ["ipapi.is", "proxycheck", "IPPure", "ip-api"];
     return failReport(names[i] || "source", s.reason || "rejected");
   });
 }
 
 function firstIp(promises) {
   return new Promise(function (resolve) {
-    var pending = promises.length;
-    var done = false;
-    function one(p) {
+    let pending = promises.length;
+    let done = false;
+    promises.forEach(function (p) {
       Promise.resolve(p).then(
         function (r) {
           if (!done && r && r.ok && r.ip) {
@@ -110,15 +107,14 @@ function firstIp(promises) {
           if (!done && pending <= 0) resolve("");
         }
       );
-    }
-    for (var i = 0; i < promises.length; i++) one(promises[i]);
+    });
   });
 }
 
 async function lookupIpapiIs(policy, key) {
   try {
-    var url = "https://api.ipapi.is/";
-    if (key) url += (url.indexOf("?") >= 0 ? "&" : "?") + "key=" + encodeURIComponent(key);
+    let url = "https://api.ipapi.is/";
+    if (key) url += "?key=" + encodeURIComponent(key);
     const resp = await qxFetch(url, { timeout: 7000, policy: policy });
     const data = parseJSON(resp && resp.body);
     if (!data || !data.ip) throw new Error(statusErr(resp));
@@ -147,7 +143,6 @@ async function lookupIpapiIs(policy, key) {
       score: ipapiFlagScore(data),
       weight: 1.2,
       line: flags.join(" · "),
-      raw: data,
     };
   } catch (e) {
     return failReport("ipapi.is", e && e.message ? e.message : e);
@@ -166,16 +161,11 @@ function ipapiFlagScore(data) {
 
 async function lookupProxycheck(ip, policy, key) {
   try {
-    var url =
-      "https://proxycheck.io/v2/" +
-      encodeURIComponent(ip) +
-      "?vpn=1&asn=1&risk=1&port=1&seen=1";
+    let url = "https://proxycheck.io/v2/" + encodeURIComponent(ip) + "?vpn=1&asn=1&risk=1&port=1&seen=1";
     if (key) url += "&key=" + encodeURIComponent(key);
     const resp = await qxFetch(url, { timeout: 7000, policy: policy });
     const data = parseJSON(resp && resp.body);
-    if (!data || data.status !== "ok") {
-      throw new Error((data && data.message) || statusErr(resp));
-    }
+    if (!data || data.status !== "ok") throw new Error((data && data.message) || statusErr(resp));
     const rec = data[ip] || pickRecord(data);
     if (!rec) throw new Error("no record");
     const isProxy = String(rec.proxy).toLowerCase() === "yes";
@@ -199,7 +189,6 @@ async function lookupProxycheck(ip, policy, key) {
       score: isFinite(score) ? score : null,
       weight: 1.3,
       line: bits.join(" · ") || "No flags",
-      raw: rec,
     };
   } catch (e) {
     return failReport("proxycheck", e && e.message ? e.message : e);
@@ -208,7 +197,7 @@ async function lookupProxycheck(ip, policy, key) {
 
 function pickRecord(data) {
   const keys = Object.keys(data || {});
-  for (var i = 0; i < keys.length; i++) {
+  for (let i = 0; i < keys.length; i++) {
     const v = data[keys[i]];
     if (v && typeof v === "object" && (v.proxy != null || v.type != null || v.risk != null)) return v;
   }
@@ -222,16 +211,9 @@ function proxycheckKind(type, isProxy) {
   if (t.indexOf("residential") >= 0) return isProxy ? "resiproxy" : "residential";
   if (t.indexOf("wireless") >= 0 || t.indexOf("cellular") >= 0 || t.indexOf("mobile") >= 0) return "mobile";
   if (t.indexOf("business") >= 0 || t.indexOf("education") >= 0 || t.indexOf("school") >= 0) return "business";
-  if (
-    t.indexOf("hosting") >= 0 ||
-    t.indexOf("dch") >= 0 ||
-    t.indexOf("data") >= 0 ||
-    t.indexOf("server") >= 0
-  ) {
-    return "datacenter";
-  }
-  if (isProxy || t.indexOf("sock") >= 0 || t.indexOf("http") >= 0 || t.indexOf("comp") >= 0) return "proxy";
-  return isProxy ? "proxy" : "clean";
+  if (t.indexOf("hosting") >= 0 || t.indexOf("dch") >= 0 || t.indexOf("data") >= 0 || t.indexOf("server") >= 0) return "datacenter";
+  if (isProxy || t.indexOf("sock") >= 0 || t.indexOf("http") >= 0) return "proxy";
+  return "clean";
 }
 
 function kindDefaultScore(kind) {
@@ -266,76 +248,58 @@ async function lookupIppure(policy) {
       score: isFinite(score) ? score : null,
       weight: 0.5,
       line: bits.join(" · "),
-      raw: data,
     };
   } catch (e) {
     return failReport("IPPure", e && e.message ? e.message : e);
   }
 }
 
-async function lookupIpApi(policy) {
+async function lookupIpwho(ip, policy) {
   try {
-    const resp = await qxFetch(
-      "http://ip-api.com/json?fields=status,message,country,countryCode,regionName,city,isp,org,as,mobile,proxy,hosting,query",
-      { timeout: 7000, policy: policy }
-    );
+    const path = ip ? "/" + encodeURIComponent(ip) : "";
+    const resp = await qxFetch("https://ipwho.is" + path, { timeout: 8000, policy: policy });
     const data = parseJSON(resp && resp.body);
-    if (!data || data.status !== "success" || !data.query) {
-      throw new Error((data && data.message) || statusErr(resp));
-    }
+    if (!data || data.success === false || !data.ip) throw new Error((data && data.message) || statusErr(resp));
+    const conn = data.connection || {};
     return {
-      source: "ip-api",
+      source: "ipwho.is",
       ok: true,
-      ip: data.query,
-      cc: data.countryCode || "",
-      region: data.regionName || "",
+      ip: data.ip,
+      cc: data.country_code || "",
+      region: data.region || "",
       city: data.city || "",
-      isp: data.isp || data.org || "",
-      asn: data.as || "",
+      isp: conn.isp || conn.org || "",
+      asn: conn.asn ? "AS" + conn.asn + (conn.org ? " " + conn.org : "") : "",
       kind: "",
       score: null,
       weight: 0,
-      line: "Geo / ASN only",
-      raw: data,
+      line: "HTTPS geo / ASN only",
     };
   } catch (e) {
-    return failReport("ip-api", e && e.message ? e.message : e);
+    return failReport("ipwho.is", e && e.message ? e.message : e);
   }
 }
 
 function summarize(reports) {
-  const ok = reports.filter(function (r) {
-    return r.ok;
-  });
+  const ok = reports.filter((r) => r.ok);
   const geo = pickGeo(ok);
   const kinds = {};
-  ok.forEach(function (r) {
-    if (r.kind) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
-  });
+  ok.forEach((r) => { if (r.kind) kinds[r.kind] = (kinds[r.kind] || 0) + 1; });
   const kind = consensusKind(kinds);
-  var num = 0;
-  var den = 0;
-  ok.forEach(function (r) {
+  let num = 0;
+  let den = 0;
+  ok.forEach((r) => {
     if (r.weight > 0 && r.score != null && isFinite(r.score)) {
       num += r.score * r.weight;
       den += r.weight;
     }
   });
-  var score = den ? Math.round(num / den) : kindDefaultScore(kind);
+  let score = den ? Math.round(num / den) : kindDefaultScore(kind);
   if (kind === "tor") score = Math.max(score, 90);
   if (kind === "vpn" || kind === "proxy" || kind === "resiproxy") score = Math.max(score, 50);
   if (kind === "datacenter") score = Math.max(score, 40);
   score = Math.max(0, Math.min(100, score));
-
-  const nRisk = ok.filter(function (r) {
-    return r.weight > 0;
-  }).length;
-  const basis =
-    nRisk +
-    " sources · " +
-    kindLabel(kind) +
-    (kinds[kind] ? " " + kinds[kind] + " vote(s)" : "");
-
+  const nRisk = ok.filter((r) => r.weight > 0).length;
   return {
     ip: geo.ip || (ok[0] && ok[0].ip) || "",
     cc: geo.cc,
@@ -346,76 +310,59 @@ function summarize(reports) {
     kind: kind,
     kindLabel: kindLabel(kind),
     score: score,
-    basis: basis,
+    basis: nRisk + " risk sources · " + kindLabel(kind) + (kinds[kind] ? " " + kinds[kind] + " vote(s)" : ""),
     votes: kinds,
   };
 }
 
 function pickGeo(ok) {
-  const order = ["ip-api", "proxycheck", "ipapi.is", "IPPure"];
+  const order = ["ipwho.is", "proxycheck", "ipapi.is", "IPPure"];
   const out = { ip: "", cc: "", region: "", city: "", isp: "", asn: "" };
   order.forEach(function (name) {
-    const r = ok.filter(function (x) {
-      return x.source === name;
-    })[0];
+    const r = ok.find((x) => x.source === name);
     if (!r) return;
-    if (!out.ip && r.ip) out.ip = r.ip;
-    if (!out.cc && r.cc) out.cc = r.cc;
-    if (!out.region && r.region) out.region = r.region;
-    if (!out.city && r.city) out.city = r.city;
-    if (!out.isp && r.isp) out.isp = r.isp;
-    if (!out.asn && r.asn) out.asn = r.asn;
+    ["ip", "cc", "region", "city", "isp", "asn"].forEach((k) => { if (!out[k] && r[k]) out[k] = r[k]; });
   });
   return out;
 }
 
-function consensusKind(votes) {
-  const rank = ["tor", "vpn", "proxy", "resiproxy", "datacenter", "mobile", "business", "residential", "clean"];
-  for (var i = 0; i < rank.length; i++) {
-    if (votes[rank[i]]) return rank[i];
-  }
+function consensusKind(kinds) {
+  const rank = ["tor", "vpn", "proxy", "resiproxy", "datacenter", "business", "mobile", "residential", "clean"];
+  for (let i = 0; i < rank.length; i++) if (kinds[rank[i]]) return rank[i];
   return "clean";
 }
 
 function kindLabel(kind) {
-  if (kind === "tor") return "Tor exit";
-  if (kind === "vpn") return "VPN";
-  if (kind === "proxy") return "Proxy";
-  if (kind === "resiproxy") return "Residential proxy";
-  if (kind === "datacenter") return "Datacenter";
-  if (kind === "mobile") return "Cellular";
-  if (kind === "business") return "Business";
-  if (kind === "residential") return "Residential";
-  return "Clean";
+  const labels = {
+    tor: "Tor exit", vpn: "VPN", proxy: "Proxy", resiproxy: "Residential proxy",
+    datacenter: "Datacenter", business: "Business", mobile: "Mobile", residential: "Residential", clean: "Clean",
+  };
+  return labels[kind] || kind || "Unknown";
 }
 
-function kindHtml(verdict) {
+function kindHtml(v) {
   const risky = { tor: 1, vpn: 1, proxy: 1, resiproxy: 1, datacenter: 1 };
-  const color = risky[verdict.kind] ? "#b45309" : "#15803d";
-  return '<font color="' + color + '">' + escapeHtml(verdict.kindLabel) + "</font>";
+  const color = risky[v.kind] ? "#b45309" : "#15803d";
+  return '<font color="' + color + '">' + escapeHtml(v.kindLabel) + "</font>";
 }
 
 function riskLevel(score) {
-  if (score <= 24) return { label: "Low ✅", color: "#28a745" };
-  if (score <= 49) return { label: "Medium 🟡", color: "#ffc107" };
-  if (score <= 74) return { label: "High ⚠️", color: "#ff8c00" };
-  return { label: "Critical ‼️", color: "#dc3545" };
+  if (score <= 24) return { label: "Low", color: "#28a745" };
+  if (score <= 49) return { label: "Medium", color: "#ffc107" };
+  if (score <= 74) return { label: "High", color: "#ff8c00" };
+  return { label: "Critical", color: "#dc3545" };
 }
 
 function statusErr(resp) {
   if (!resp) return "no response";
-  if (resp.error) return String(resp.error);
-  if (resp.statusCode) return "HTTP " + resp.statusCode;
-  return "lookup failed";
+  const code = resp.statusCode || resp.status;
+  return code ? "HTTP " + code : "lookup failed";
 }
 
 async function policyChain(node) {
   if (!node || typeof $configuration === "undefined") return node || "";
   try {
-    const msg = await $configuration.sendMessage({
-      action: "get_policy_state",
-      content: node,
-    });
+    const msg = await $configuration.sendMessage({ action: "get_policy_state", content: node });
     if (!msg || msg.error || !msg.ret) return node;
     const val = msg.ret[node];
     if (val == null) return node;
@@ -425,35 +372,19 @@ async function policyChain(node) {
   }
 }
 
-function parseJSON(text) {
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    return null;
-  }
-}
-
-function isHttpRequest() {
-  return typeof $request !== "undefined";
-}
-
-function envPolicy() {
-  if (typeof $environment === "undefined") return "";
-  return typeof $environment.params === "string" ? $environment.params : "";
-}
+function parseJSON(text) { try { return JSON.parse(text); } catch (e) { return null; } }
+function isHttpRequest() { return typeof $request !== "undefined"; }
+function envPolicy() { return typeof $environment !== "undefined" && typeof $environment.params === "string" ? $environment.params : ""; }
 
 function parsePairs(raw) {
   const out = {};
-  String(raw || "")
-    .replace(/^\?/, "")
-    .split("&")
-    .forEach((part) => {
-      if (!part) return;
-      const i = part.indexOf("=");
-      const k = decodeURIComponent((i < 0 ? part : part.slice(0, i)).trim());
-      const v = decodeURIComponent((i < 0 ? "" : part.slice(i + 1)).trim());
-      if (k) out[k] = v;
-    });
+  String(raw || "").replace(/^\?/, "").split("&").forEach((part) => {
+    if (!part) return;
+    const i = part.indexOf("=");
+    const k = decodeURIComponent((i < 0 ? part : part.slice(0, i)).trim());
+    const v = decodeURIComponent((i < 0 ? "" : part.slice(i + 1)).trim());
+    if (k) out[k] = v;
+  });
   return out;
 }
 
@@ -462,14 +393,10 @@ function query() {
   if (!isHttpRequest()) return fromArg;
   const url = $request.url || "";
   const i = url.indexOf("?");
-  const fromUrl = i >= 0 ? parsePairs(url.slice(i + 1)) : {};
-  return Object.assign({}, fromArg, fromUrl);
+  return Object.assign({}, fromArg, i >= 0 ? parsePairs(url.slice(i + 1)) : {});
 }
 
-function policyName() {
-  const q = query();
-  return q.policy || q.node || envPolicy() || "";
-}
+function policyName() { const q = query(); return q.policy || q.node || envPolicy() || ""; }
 
 function qxFetch(url, opt) {
   opt = opt || {};
@@ -482,106 +409,47 @@ function qxFetch(url, opt) {
     opts: { hints: false },
   };
   if (opt.policy) req.opts.policy = opt.policy;
-  if (opt.redirection === false) req.opts.redirection = false;
   if (opt.body != null) req.body = opt.body;
-  return Promise.race([
-    $task.fetch(req),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeout)),
-  ]);
+  return Promise.race([$task.fetch(req), new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), timeout))]);
 }
 
 function flagEmoji(cc) {
-  if (!cc || !/^[A-Za-z]{2}$/.test(cc)) return "🌍";
-  return String.fromCodePoint(
-    ...cc
-      .toUpperCase()
-      .split("")
-      .map((c) => 127397 + c.charCodeAt(0))
-  );
+  if (!cc || !/^[A-Za-z]{2}$/.test(cc)) return "";
+  return String.fromCodePoint(...cc.toUpperCase().split("").map((c) => 127397 + c.charCodeAt(0)));
 }
 
 function escapeHtml(s) {
-  return String(s == null ? "" : s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function pageWrap(title, inner) {
-  return (
-    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
-    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-    "<title>" +
+  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escapeHtml(title) +
-    "</title><style>" +
-    "body{margin:0;background:#f3f4f6;color:#111;font:16px/1.55 -apple-system,BlinkMacSystemFont,\"PingFang SC\",sans-serif}" +
-    "main{max-width:480px;margin:20px auto;background:#fff;border-radius:16px;padding:20px 18px}" +
-    "h1{margin:0 0 14px;font-size:18px;text-align:center}" +
-    ".row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #eee}" +
-    ".k{color:#6b7280;flex:0 0 108px}" +
-    ".v{flex:1;text-align:right;word-break:break-all}" +
-    ".foot{margin-top:14px;text-align:center;color:#5b4db1;font-size:14px}" +
-    "</style></head><body><main><h1>" +
-    escapeHtml(title) +
-    "</h1>" +
-    inner +
-    "</main></body></html>"
-  );
+    '</title><style>body{margin:0;background:#f3f4f6;color:#111;font:16px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:480px;margin:20px auto;background:#fff;border-radius:16px;padding:20px 18px}h1{margin:0 0 14px;font-size:18px;text-align:center}.row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #eee}.k{color:#6b7280;flex:0 0 108px}.v{flex:1;text-align:right;word-break:break-all}.foot{margin-top:14px;text-align:center;color:#5b4db1;font-size:14px}</style></head><body><main><h1>' +
+    escapeHtml(title) + "</h1>" + inner + "</main></body></html>";
 }
 
 function renderRows(items, mode) {
-  return (items || [])
-    .filter((item) => item && item.value != null && item.value !== "")
-    .map((item) => {
-      const val = item.html || escapeHtml(item.value);
-      if (mode === "http") {
-        return (
-          '<div class="row"><span class="k">' +
-          escapeHtml(item.key) +
-          '</span><span class="v">' +
-          val +
-          "</span></div>"
-        );
-      }
-      return '<b><font color="#888">' + escapeHtml(item.key) + " : </font></b>" + val + "<br/>";
-    })
-    .join("");
+  return (items || []).filter((item) => item && item.value != null && item.value !== "").map((item) => {
+    const val = item.html || escapeHtml(item.value);
+    if (mode === "http") return '<div class="row"><span class="k">' + escapeHtml(item.key) + '</span><span class="v">' + val + "</span></div>";
+    return '<b><font color="#888">' + escapeHtml(item.key) + " : </font></b>" + val + "<br/>";
+  }).join("");
 }
 
 function doneOK(title, items, extra) {
   extra = extra || {};
   const node = extra.node || policyName();
-  const httpInner =
-    renderRows(items, "http") + (node ? '<div class="foot">Node ➟ ' + escapeHtml(node) + "</div>" : "");
-  const popup =
-    '<div style="text-align:center;font-family:-apple-system;font-size:15px;line-height:1.6">' +
-    '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
-    renderRows(items, "popup") +
-    '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
-    (node ? '<font color="#6959CD"><b>Node</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
-    "</div>";
-
+  const httpInner = renderRows(items, "http") + (node ? '<div class="foot">Node ➟ ' + escapeHtml(node) + "</div>" : "");
+  const popup = '<div style="text-align:center;font-family:-apple-system;font-size:15px;line-height:1.6"><hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
+    renderRows(items, "popup") + '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
+    (node ? '<font color="#6959CD"><b>Node</b> ➟ ' + escapeHtml(node) + "</font>" : "") + "</div>";
   if (isHttpRequest()) {
     const asJson = query().format === "json";
     $done({
       status: "HTTP/1.1 200 OK",
-      headers: {
-        "Content-Type": asJson ? "application/json; charset=utf-8" : "text/html; charset=utf-8",
-        "Cache-Control": "no-store",
-      },
-      body: asJson
-        ? JSON.stringify(
-            {
-              title: title,
-              node: node,
-              items: (items || []).map((i) => ({ key: i.key, value: i.value })),
-              extra: extra.json || {},
-            },
-            null,
-            2
-          )
-        : pageWrap(title, httpInner),
+      headers: { "Content-Type": asJson ? "application/json; charset=utf-8" : "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      body: asJson ? JSON.stringify({ title: title, node: node, items: (items || []).map((i) => ({ key: i.key, value: i.value })), extra: extra.json || {} }, null, 2) : pageWrap(title, httpInner),
     });
     return;
   }
@@ -589,11 +457,5 @@ function doneOK(title, items, extra) {
 }
 
 function doneErr(title, message) {
-  doneOK(title, [
-    {
-      key: "Error",
-      value: message,
-      html: '<font color="#dc3545">' + escapeHtml(message) + "</font>",
-    },
-  ]);
+  doneOK(title, [{ key: "Error", value: message, html: '<font color="#dc3545">' + escapeHtml(message) + "</font>" }]);
 }
