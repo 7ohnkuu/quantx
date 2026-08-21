@@ -1,26 +1,26 @@
 /**
- * 节点风险详情 — Quantumult X
+ * Node Risk — Quantumult X
  *
- * 不再只信 IPPure。并行查询：
- *   - ipapi.is      机房 / VPN / 代理 / Tor / 滥用（免费匿名）
- *   - proxycheck.io VPN/代理类型 + 0–100 风险分（免费匿名）
- *   - IPPure        欺诈分（权重最低，容易低估机房/VPN）
+ * Do not trust IPPure alone. Query in parallel:
+ *   - ipapi.is       datacenter / VPN / proxy / Tor / abuser (free, no key)
+ *   - proxycheck.io  VPN/proxy type + 0–100 risk (free, no key)
+ *   - IPPure         fraud score (lowest weight; often under-rates hosting/VPN)
  *
- * 综合分按来源加权，并列出各库结论，避免单库误判。
+ * Weighted consensus score, with each source shown so disagreements stay visible.
  *
  * [rewrite_local]
  * ^http://httpjs\.local/risk url script-echo-response server-info.js
  *
  * [task_local]
- * event-interaction server-info.js, tag=节点風險详情, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/WiFi.png, enabled=true
+ * event-interaction server-info.js, tag=Node Risk, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/WiFi.png, enabled=true
  *
- * 查询参数：
- *   ?policy=节点名
+ * Query:
+ *   ?policy=NodeName
  *   ?format=json
- *   ?ipapi_key=  ?pc_key=   可选，提高额度
+ *   ?ipapi_key=  ?pc_key=   optional, higher quota
  */
 
-const TITLE = "节点风险详情";
+const TITLE = "Node Risk";
 const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1";
 
@@ -33,11 +33,11 @@ const UA =
   const pPure = lookupIppure(policy);
   const pGeo = lookupIpApi(policy);
   const ip = await firstIp([pIpapi, pPure, pGeo]);
-  const pPc = ip ? lookupProxycheck(ip, policy, q.pc_key || q.proxycheck_key) : Promise.resolve(failReport("proxycheck", "无 IP"));
+  const pPc = ip ? lookupProxycheck(ip, policy, q.pc_key || q.proxycheck_key) : Promise.resolve(failReport("proxycheck", "no IP"));
 
   const reports = settleReports(await Promise.allSettled([pIpapi, pPc, pPure, pGeo]));
   const verdict = summarize(reports);
-  if (!verdict.ip) throw new Error("全部数据源失败");
+  if (!verdict.ip) throw new Error("all sources failed");
 
   const loc = [flagEmoji(verdict.cc), verdict.cc, verdict.region, verdict.city]
     .filter(function (x) {
@@ -49,28 +49,28 @@ const UA =
     { key: "IP", value: verdict.ip },
     { key: "ISP", value: verdict.isp || "-" },
     { key: "ASN", value: verdict.asn || "-" },
-    { key: "位置", value: loc || "-" },
-    { key: "类型", value: verdict.kindLabel, html: kindHtml(verdict) },
+    { key: "Location", value: loc || "-" },
+    { key: "Type", value: verdict.kindLabel, html: kindHtml(verdict) },
     {
-      key: "综合风险",
+      key: "Risk",
       value: verdict.score + " · " + risk.label,
       html: '<font color="' + risk.color + '">' + escapeHtml(verdict.score + " · " + risk.label) + "</font>",
     },
-    { key: "依据", value: verdict.basis },
+    { key: "Sources", value: verdict.basis },
   ].concat(
     reports.map(function (r) {
       return {
         key: r.source,
-        value: r.ok ? r.line : "失败 " + r.error,
+        value: r.ok ? r.line : "Failed " + r.error,
         html: r.ok
           ? escapeHtml(r.line)
-          : '<font color="#9ca3af">' + escapeHtml("失败 " + r.error) + "</font>",
+          : '<font color="#9ca3af">' + escapeHtml("Failed " + r.error) + "</font>",
       };
     })
   );
 
   doneOK(TITLE, items, {
-    node: nodeLabel || policy || "当前策略",
+    node: nodeLabel || policy || "current policy",
     json: { verdict: verdict, reports: reports },
   });
 })().catch((err) => {
@@ -79,7 +79,7 @@ const UA =
 });
 
 function failReport(source, error) {
-  return { source: source, ok: false, error: String(error || "未知错误") };
+  return { source: source, ok: false, error: String(error || "unknown error") };
 }
 
 function settleReports(settled) {
@@ -129,11 +129,11 @@ async function lookupIpapiIs(policy, key) {
     const abuser = !!data.is_abuser;
     const flags = [];
     if (tor) flags.push("Tor");
-    if (abuser) flags.push("滥用");
+    if (abuser) flags.push("Abuse");
     if (vpn) flags.push("VPN");
-    if (proxy) flags.push("代理");
-    if (dc) flags.push("数据中心");
-    if (!flags.length) flags.push("未标代理");
+    if (proxy) flags.push("Proxy");
+    if (dc) flags.push("Datacenter");
+    if (!flags.length) flags.push("No proxy flag");
     return {
       source: "ipapi.is",
       ok: true,
@@ -177,15 +177,15 @@ async function lookupProxycheck(ip, policy, key) {
       throw new Error((data && data.message) || statusErr(resp));
     }
     const rec = data[ip] || pickRecord(data);
-    if (!rec) throw new Error("无记录");
+    if (!rec) throw new Error("no record");
     const isProxy = String(rec.proxy).toLowerCase() === "yes";
     const type = String(rec.type || "");
     const kind = proxycheckKind(type, isProxy);
     const score = rec.risk == null || rec.risk === "" ? kindDefaultScore(kind) : Number(rec.risk);
     const bits = [];
     if (type) bits.push(type);
-    if (isProxy) bits.push("代理");
-    if (isFinite(score)) bits.push(score + " 分");
+    if (isProxy) bits.push("Proxy");
+    if (isFinite(score)) bits.push(String(score));
     return {
       source: "proxycheck",
       ok: true,
@@ -198,7 +198,7 @@ async function lookupProxycheck(ip, policy, key) {
       kind: kind,
       score: isFinite(score) ? score : null,
       weight: 1.3,
-      line: bits.join(" · ") || "无标记",
+      line: bits.join(" · ") || "No flags",
       raw: rec,
     };
   } catch (e) {
@@ -250,9 +250,9 @@ async function lookupIppure(policy) {
     if (!data || !data.ip) throw new Error(statusErr(resp));
     const score = Number(data.fraudScore);
     const kind = data.isResidential ? "residential" : "datacenter";
-    const bits = [data.isResidential ? "住宅" : "机房"];
-    if (data.isBroadcast) bits.push("广播");
-    if (isFinite(score)) bits.push(score + " 分");
+    const bits = [data.isResidential ? "Residential" : "Datacenter"];
+    if (data.isBroadcast) bits.push("Broadcast");
+    if (isFinite(score)) bits.push(String(score));
     return {
       source: "IPPure",
       ok: true,
@@ -276,7 +276,7 @@ async function lookupIppure(policy) {
 async function lookupIpApi(policy) {
   try {
     const resp = await qxFetch(
-      "http://ip-api.com/json?lang=zh-CN&fields=status,message,country,countryCode,regionName,city,isp,org,as,mobile,proxy,hosting,query",
+      "http://ip-api.com/json?fields=status,message,country,countryCode,regionName,city,isp,org,as,mobile,proxy,hosting,query",
       { timeout: 7000, policy: policy }
     );
     const data = parseJSON(resp && resp.body);
@@ -295,7 +295,7 @@ async function lookupIpApi(policy) {
       kind: "",
       score: null,
       weight: 0,
-      line: "仅地理 / ASN",
+      line: "Geo / ASN only",
       raw: data,
     };
   } catch (e) {
@@ -332,9 +332,9 @@ function summarize(reports) {
   }).length;
   const basis =
     nRisk +
-    " 个风控库 · " +
+    " sources · " +
     kindLabel(kind) +
-    (kinds[kind] ? " " + kinds[kind] + " 票" : "");
+    (kinds[kind] ? " " + kinds[kind] + " vote(s)" : "");
 
   return {
     ip: geo.ip || (ok[0] && ok[0].ip) || "",
@@ -378,15 +378,15 @@ function consensusKind(votes) {
 }
 
 function kindLabel(kind) {
-  if (kind === "tor") return "Tor 出口";
+  if (kind === "tor") return "Tor exit";
   if (kind === "vpn") return "VPN";
-  if (kind === "proxy") return "代理";
-  if (kind === "resiproxy") return "住宅代理";
-  if (kind === "datacenter") return "数据中心";
-  if (kind === "mobile") return "蜂窝网络";
-  if (kind === "business") return "商业宽带";
-  if (kind === "residential") return "住宅网络";
-  return "普通";
+  if (kind === "proxy") return "Proxy";
+  if (kind === "resiproxy") return "Residential proxy";
+  if (kind === "datacenter") return "Datacenter";
+  if (kind === "mobile") return "Cellular";
+  if (kind === "business") return "Business";
+  if (kind === "residential") return "Residential";
+  return "Clean";
 }
 
 function kindHtml(verdict) {
@@ -396,17 +396,17 @@ function kindHtml(verdict) {
 }
 
 function riskLevel(score) {
-  if (score <= 24) return { label: "低风险 ✅", color: "#28a745" };
-  if (score <= 49) return { label: "中风险 🟡", color: "#ffc107" };
-  if (score <= 74) return { label: "高风险 ⚠️", color: "#ff8c00" };
-  return { label: "极高风险 ‼️", color: "#dc3545" };
+  if (score <= 24) return { label: "Low ✅", color: "#28a745" };
+  if (score <= 49) return { label: "Medium 🟡", color: "#ffc107" };
+  if (score <= 74) return { label: "High ⚠️", color: "#ff8c00" };
+  return { label: "Critical ‼️", color: "#dc3545" };
 }
 
 function statusErr(resp) {
-  if (!resp) return "无响应";
+  if (!resp) return "no response";
   if (resp.error) return String(resp.error);
   if (resp.statusCode) return "HTTP " + resp.statusCode;
-  return "查询失败";
+  return "lookup failed";
 }
 
 async function policyChain(node) {
@@ -510,7 +510,7 @@ function escapeHtml(s) {
 
 function pageWrap(title, inner) {
   return (
-    "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">" +
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<title>" +
     escapeHtml(title) +
@@ -553,13 +553,13 @@ function doneOK(title, items, extra) {
   extra = extra || {};
   const node = extra.node || policyName();
   const httpInner =
-    renderRows(items, "http") + (node ? '<div class="foot">节点 ➟ ' + escapeHtml(node) + "</div>" : "");
+    renderRows(items, "http") + (node ? '<div class="foot">Node ➟ ' + escapeHtml(node) + "</div>" : "");
   const popup =
     '<div style="text-align:center;font-family:-apple-system;font-size:15px;line-height:1.6">' +
     '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
     renderRows(items, "popup") +
     '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
-    (node ? '<font color="#6959CD"><b>节点</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
+    (node ? '<font color="#6959CD"><b>Node</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
     "</div>";
 
   if (isHttpRequest()) {
@@ -591,7 +591,7 @@ function doneOK(title, items, extra) {
 function doneErr(title, message) {
   doneOK(title, [
     {
-      key: "错误",
+      key: "Error",
       value: message,
       html: '<font color="#dc3545">' + escapeHtml(message) + "</font>",
     },

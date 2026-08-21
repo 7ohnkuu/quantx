@@ -1,23 +1,23 @@
 /**
- * 网络信息 — Quantumult X
+ * Network Info — Quantumult X
  *
- * 从 xream/net-lsp-x.js 重构：去掉 Surge/Loon/Stash/Env 兼容层，只保留 QX。
- * 同时支持：
- *   1. HTTP Request（script-echo-response）：Safari 打开 http://httpjs.local/network
- *   2. event-interaction：长按节点 → 网络信息
+ * Rewrite of xream/net-lsp-x.js: QX only, no Surge/Loon/Stash/Env layer.
+ * Modes:
+ *   1. HTTP Request (script-echo-response): open http://httpjs.local/network
+ *   2. event-interaction: long-press a node → Network Info
  *
  * [rewrite_local]
  * ^http://httpjs\.local/network url script-echo-response network-info.js
  *
  * [task_local]
- * event-interaction network-info.js, tag=网络信息, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Global.png, enabled=true
+ * event-interaction network-info.js, tag=Network Info, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Global.png, enabled=true
  *
- * 查询参数：
- *   ?policy=节点名     指定落地节点
- *   ?format=json      返回 JSON
+ * Query:
+ *   ?policy=NodeName   force egress node
+ *   ?format=json
  */
 
-const TITLE = "网络信息";
+const TITLE = "Network Info";
 const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
@@ -53,21 +53,21 @@ const UA =
 
   const items = [];
   if (ssid) items.push({ key: "SSID", value: ssid });
-  items.push({ key: "直连 IP", value: direct.ip || direct.error || "-" });
-  items.push({ key: "直连位置", value: formatWhere(direct) });
-  if (direct.isp) items.push({ key: "直连运营商", value: direct.isp });
+  items.push({ key: "Direct IP", value: direct.ip || direct.error || "-" });
+  items.push({ key: "Direct location", value: formatWhere(direct) });
+  if (direct.isp) items.push({ key: "Direct ISP", value: direct.isp });
   if (entrance) {
-    items.push({ key: "入口", value: entrance.ip || "-" });
+    items.push({ key: "Ingress", value: entrance.ip || "-" });
     const where = formatWhere(entrance);
-    if (where) items.push({ key: "入口位置", value: where });
+    if (where) items.push({ key: "Ingress location", value: where });
   }
-  items.push({ key: "落地 IP", value: land.ip || land.error || "-" });
-  items.push({ key: "落地位置", value: formatWhere(land) });
-  if (land.isp) items.push({ key: "落地运营商", value: land.isp });
+  items.push({ key: "Egress IP", value: land.ip || land.error || "-" });
+  items.push({ key: "Egress location", value: formatWhere(land) });
+  if (land.isp) items.push({ key: "Egress ISP", value: land.isp });
   if (land.as) items.push({ key: "ASN", value: land.as });
 
   doneOK(TITLE, items, {
-    node: nodeLabel || policy || "当前策略",
+    node: nodeLabel || policy || "current policy",
     json: { direct, landing: land, entrance, ssid, policy },
   });
 })().catch((err) => {
@@ -86,27 +86,33 @@ function formatWhere(info) {
 async function lookupIpip(policy) {
   const resp = await qxFetch("https://myip.ipip.net/json", { timeout: 6000, policy: policy });
   const body = parseJSON(resp.body);
-  if (!body || body.ret !== "ok") throw new Error("ipip 查询失败");
+  if (!body || body.ret !== "ok") throw new Error("ipip lookup failed");
   const loc = (body.data && body.data.location) || [];
-  return {
-    ip: body.data.ip,
-    country: loc[0] || "",
-    region: loc[1] || "",
-    city: loc[2] || "",
-    isp: loc[4] || "",
-    cc: loc[0] === "中国" ? "CN" : "",
-    source: "ipip",
-  };
+  const ip = body.data.ip;
+  const cc = loc[0] === "\u4e2d\u56fd" ? "CN" : "";
+  try {
+    return await lookupIpApi(ip, "direct");
+  } catch (e) {
+    return {
+      ip: ip,
+      country: cc === "CN" ? "China" : "",
+      region: "",
+      city: "",
+      isp: "",
+      cc: cc,
+      source: "ipip",
+    };
+  }
 }
 
 async function lookupIpApi(ip, policy) {
   const path = ip ? "/" + encodeURIComponent(ip) : "";
-  const resp = await qxFetch("http://ip-api.com/json" + path + "?lang=zh-CN", {
+  const resp = await qxFetch("http://ip-api.com/json" + path, {
     timeout: 8000,
     policy: policy,
   });
   const body = parseJSON(resp.body);
-  if (!body || body.status !== "success") throw new Error((body && body.message) || "ip-api 查询失败");
+  if (!body || body.status !== "success") throw new Error((body && body.message) || "ip-api lookup failed");
   return {
     ip: body.query,
     country: body.country || "",
@@ -124,7 +130,7 @@ async function lookupIpwho(ip, policy) {
   const path = ip ? "/" + encodeURIComponent(ip) : "";
   const resp = await qxFetch("https://ipwho.is" + path, { timeout: 8000, policy: policy });
   const body = parseJSON(resp.body);
-  if (!body || body.success === false) throw new Error((body && body.message) || "ipwho.is 查询失败");
+  if (!body || body.success === false) throw new Error((body && body.message) || "ipwho.is lookup failed");
   const conn = body.connection || {};
   return {
     ip: body.ip,
@@ -140,7 +146,7 @@ async function lookupIpwho(ip, policy) {
 }
 
 async function firstOk(factories) {
-  let last = new Error("全部查询失败");
+  let last = new Error("all lookups failed");
   for (let i = 0; i < factories.length; i++) {
     try {
       return await factories[i]();
@@ -285,7 +291,7 @@ function escapeHtml(s) {
 
 function pageWrap(title, inner) {
   return (
-    "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">" +
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<title>" +
     escapeHtml(title) +
@@ -328,13 +334,13 @@ function doneOK(title, items, extra) {
   extra = extra || {};
   const node = extra.node || policyName();
   const httpInner =
-    renderRows(items, "http") + (node ? '<div class="foot">节点 ➟ ' + escapeHtml(node) + "</div>" : "");
+    renderRows(items, "http") + (node ? '<div class="foot">Node ➟ ' + escapeHtml(node) + "</div>" : "");
   const popup =
     '<div style="text-align:center;font-family:-apple-system;font-size:15px;line-height:1.6">' +
     '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
     renderRows(items, "popup") +
     '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
-    (node ? '<font color="#6959CD"><b>节点</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
+    (node ? '<font color="#6959CD"><b>Node</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
     "</div>";
 
   if (isHttpRequest()) {
@@ -366,7 +372,7 @@ function doneOK(title, items, extra) {
 function doneErr(title, message) {
   doneOK(title, [
     {
-      key: "错误",
+      key: "Error",
       value: message,
       html: '<font color="#dc3545">' + escapeHtml(message) + "</font>",
     },

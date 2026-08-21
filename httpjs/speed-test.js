@@ -1,23 +1,23 @@
 /**
- * 节点测速 — Quantumult X
+ * Speed Test — Quantumult X
  *
- * 走指定节点测 Cloudflare：延迟 / 抖动 / 下载 / 上传。
+ * Measure a node against Cloudflare: latency / jitter / download / upload.
  *
  * [rewrite_local]
  * ^http://httpjs\.local/speed url script-echo-response speed-test.js
  *
  * [task_local]
- * event-interaction speed-test.js, tag=节点测速, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Speedtest.png, enabled=true
+ * event-interaction speed-test.js, tag=Speed Test, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Speedtest.png, enabled=true
  *
- * 查询参数：
- *   ?policy=节点名
- *   ?size=2          下载 MB，默认 2，最大 5
- *   ?pings=5         延迟次数，默认 5
- *   ?noup=1          跳过上传
+ * Query:
+ *   ?policy=NodeName
+ *   ?size=2          download MB, default 2, max 5
+ *   ?pings=5         latency samples, default 5
+ *   ?noup=1          skip upload
  *   ?format=json
  */
 
-const TITLE = "节点测速";
+const TITLE = "Speed Test";
 const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 const TRACE_URL = "https://speed.cloudflare.com/cdn-cgi/trace";
@@ -45,7 +45,7 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
     if (p.ok) pingMs.push(p.ms);
     else pingErrors.push(p.error || "fail");
   }
-  if (!pingMs.length) throw new Error("延迟测试失败" + (pingErrors[0] ? "：" + pingErrors[0] : ""));
+  if (!pingMs.length) throw new Error("latency test failed" + (pingErrors[0] ? ": " + pingErrors[0] : ""));
   const st = stats(pingMs);
 
   const downTimeout = Math.min(25000, Math.max(12000, Math.round(downBytes / 1000) + 8000));
@@ -73,34 +73,34 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
 
   const items = [
     {
-      key: "延迟",
+      key: "Latency",
       value: Math.round(st.avg) + " ms",
       html: pingHtml(st.avg),
     },
     {
-      key: "最低 / 抖动",
+      key: "Min / jitter",
       value: Math.round(st.min) + " / " + Math.round(st.jitter) + " ms",
     },
     {
-      key: "下载",
-      value: down.ok ? fmtMbps(downMbps) : "失败 " + (down.error || ""),
+      key: "Download",
+      value: down.ok ? fmtMbps(downMbps) : "Failed " + (down.error || ""),
       html: down.ok
         ? speedHtml(downMbps)
-        : '<font color="#dc3545">' + escapeHtml("失败 " + (down.error || "")) + "</font>",
+        : '<font color="#dc3545">' + escapeHtml("Failed " + (down.error || "")) + "</font>",
     },
   ];
   if (!skipUp) {
     items.push({
-      key: "上传",
-      value: up && up.ok ? fmtMbps(upMbps) : "失败 " + ((up && up.error) || ""),
+      key: "Upload",
+      value: up && up.ok ? fmtMbps(upMbps) : "Failed " + ((up && up.error) || ""),
       html:
         up && up.ok
           ? speedHtml(upMbps)
-          : '<font color="#dc3545">' + escapeHtml("失败 " + ((up && up.error) || "")) + "</font>",
+          : '<font color="#dc3545">' + escapeHtml("Failed " + ((up && up.error) || "")) + "</font>",
     });
   }
   items.push({
-    key: "下载详情",
+    key: "Transfer",
     value: down.ok ? fmtBytes(downSize) + " · " + (down.ms / 1000).toFixed(2) + " s" : "",
   });
   if (trace.colo || trace.loc) {
@@ -109,16 +109,16 @@ const PING_FALLBACK = "https://cp.cloudflare.com/generate_204";
       value: [trace.colo, trace.loc ? flagEmoji(trace.loc) + " " + trace.loc : ""].filter(Boolean).join(" · "),
     });
   }
-  if (trace.ip) items.push({ key: "落地 IP", value: trace.ip });
+  if (trace.ip) items.push({ key: "Egress IP", value: trace.ip });
   items.push({
-    key: "样本",
+    key: "Samples",
     value: pingMs.map(function (ms) {
       return Math.round(ms);
     }).join(" / ") + " ms",
   });
 
   doneOK(TITLE, items, {
-    node: nodeLabel || policy || "当前策略",
+    node: nodeLabel || policy || "current policy",
     json: {
       policy: policy,
       ping: st,
@@ -323,7 +323,7 @@ function escapeHtml(s) {
 
 function pageWrap(title, inner) {
   return (
-    "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">" +
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<title>" +
     escapeHtml(title) +
@@ -366,13 +366,13 @@ function doneOK(title, items, extra) {
   extra = extra || {};
   const node = extra.node || policyName();
   const httpInner =
-    renderRows(items, "http") + (node ? '<div class="foot">节点 ➟ ' + escapeHtml(node) + "</div>" : "");
+    renderRows(items, "http") + (node ? '<div class="foot">Node ➟ ' + escapeHtml(node) + "</div>" : "");
   const popup =
     '<div style="text-align:center;font-family:-apple-system;font-size:15px;line-height:1.6">' +
     '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
     renderRows(items, "popup") +
     '<hr style="margin:10px 0;border:0;border-top:1px solid #ddd"/>' +
-    (node ? '<font color="#6959CD"><b>节点</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
+    (node ? '<font color="#6959CD"><b>Node</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
     "</div>";
 
   if (isHttpRequest()) {
@@ -404,7 +404,7 @@ function doneOK(title, items, extra) {
 function doneErr(title, message) {
   doneOK(title, [
     {
-      key: "错误",
+      key: "Error",
       value: message,
       html: '<font color="#dc3545">' + escapeHtml(message) + "</font>",
     },

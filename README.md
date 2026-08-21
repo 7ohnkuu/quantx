@@ -2,46 +2,61 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Quantumult X 自用规则与脚本。
+Quantumult X rules and HTTP Request scripts.
 
-- **规则：** 把 Apple Intelligence / Siri / Private Cloud Compute 相关域名走到代理，避免被通用 Apple 规则直连到国内 CDN。
-- **脚本：** 把三条常见的节点交互脚本改成圈 X 本地 HTTP Request（`script-echo-response`），同时保留长按节点。
+- **Rules:** Send Apple Intelligence / Siri / Private Cloud Compute hosts through the proxy so generic Apple lists cannot leak them to mainland CDNs.
+- **Scripts:** Local `script-echo-response` tools that also work as node long-press actions.
 
-## 规则
+## Rules
 
-| 文件 | 格式 |
+| File | Format |
 |---|---|
 | [`rules/apple-ai.quantx.list`](rules/apple-ai.quantx.list) | Quantumult X `[filter_remote]` |
-| [`rules/apple-ai.list`](rules/apple-ai.list) | Surge / Clash 风格（策略名为 `PROXY`） |
+| [`rules/apple-ai.list`](rules/apple-ai.list) | Surge / Clash style (policy `PROXY`) |
 
-必须放在 blackmatrix7 等宽泛 Apple 规则**之前**，否则 `icloud.com` / `apple.com` 通配会把 PCC 流量漏到直连。
+Place this list **before** broad Apple rules such as blackmatrix7. Otherwise `icloud.com` / `apple.com` wildcards send PCC traffic direct.
 
-Quantumult X 远程分流：
+Quantumult X remote filter:
 
 ```text
 https://raw.githubusercontent.com/7ohnkuu/quantx/main/rules/apple-ai.quantx.list, tag=Apple Intelligence, update-interval=86400, opt-parser=false, enabled=true
 ```
 
-## HTTP 脚本
+## HTTP scripts
 
-把下面文件复制到 **Quantumult X → Scripts**，再把 [`httpjs/qx-http-request.conf`](httpjs/qx-http-request.conf) 合并进配置。
+1. Copy the `.js` files from [`httpjs/`](httpjs/) into **Quantumult X → Scripts**.
+2. Merge [`httpjs/qx-http-request.conf`](httpjs/qx-http-request.conf) into your profile (`[dns]`, `[filter_local]`, `[rewrite_local]`, `[task_local]`).
+3. Turn the Quantumult X tunnel on.
 
-| 脚本 | 作用 | Safari（隧道开启） |
+| Script | Purpose | Safari |
 |---|---|---|
-| [`httpjs/network-info.js`](httpjs/network-info.js) | 直连 / 落地 IP、入口、SSID | http://httpjs.local/network |
-| [`httpjs/server-info.js`](httpjs/server-info.js) | 节点风险：ipapi.is + proxycheck + IPPure 交叉验证 | http://httpjs.local/risk |
-| [`httpjs/streaming-check.js`](httpjs/streaming-check.js) | 流媒体与 ChatGPT 解锁查询 | http://httpjs.local/stream |
-| [`httpjs/speed-test.js`](httpjs/speed-test.js) | 节点测速：延迟 / 抖动 / 下载 / 上传（Cloudflare） | http://httpjs.local/speed |
+| [`network-info.js`](httpjs/network-info.js) | Direct / egress IP, ingress, SSID | http://httpjs.local/network |
+| [`server-info.js`](httpjs/server-info.js) | Node risk (ipapi.is + proxycheck + IPPure) | http://httpjs.local/risk |
+| [`streaming-check.js`](httpjs/streaming-check.js) | Streaming and ChatGPT unlock | http://httpjs.local/stream |
+| [`speed-test.js`](httpjs/speed-test.js) | Latency, jitter, download, upload via Cloudflare | http://httpjs.local/speed |
 
-可选参数：`?policy=节点名`、`?format=json`。
+Long-press a node for the same tools (`[task_local]` tags: Network Info, Node Risk, Streaming Unlock, Speed Test).
 
-长按节点仍可用，配置见 `qx-http-request.conf` 的 `[task_local]`。原始远程样本在 [`httpjs/sample.txt`](httpjs/sample.txt)，下载原文在 [`httpjs/original/`](httpjs/original/)。
+### Query parameters
+
+| Param | Scripts | Meaning |
+|---|---|---|
+| `policy=NodeName` | all | Force that node (same as a long-press) |
+| `format=json` | all | JSON instead of HTML |
+| `size=2` | speed | Download size in MB (1–5, default 2) |
+| `pings=5` | speed | Latency samples (3–8) |
+| `noup=1` | speed | Skip upload |
+| `ipapi_key=` / `pc_key=` | risk | Optional keys for higher quota |
+
+Example: `http://httpjs.local/speed?policy=NodeName&size=5`
+
+[`httpjs/sample.txt`](httpjs/sample.txt) is the original remote `event-interaction` sample. [`httpjs/original/`](httpjs/original/) holds upstream snapshots (their comments stay as published).
 
 ## License
 
-本仓库以 [MIT License](LICENSE) 发布。
+Released under the [MIT License](LICENSE).
 
-`httpjs/original/` 中的文件来自上游作者，仅作对照，版权仍归原作者。重构脚本基于：
+Rewritten scripts are based on:
 
 - [xream/scripts](https://github.com/xream/scripts) `net-lsp-x.js`
 - [ddgksf2013](https://github.com/ddgksf2013) `server-info-pure.js`

@@ -1,24 +1,24 @@
 /**
- * 流媒体解锁查询 — Quantumult X
+ * Streaming Unlock — Quantumult X
  *
- * 从 KOP-XIAO/streaming-ui-check.js 重构：
- *   - 所有检测 await 完成后再 $done（原脚本 YouTube/DAZN/Paramount 未等待）
- *   - 去掉重复的 $configuration.sendMessage
- *   - ChatGPT 改为 cdn-cgi/trace
- *   - 同时支持 HTTP Request 与 event-interaction
+ * Rewrite of KOP-XIAO/streaming-ui-check.js:
+ *   - Await every check before $done (original fired YouTube/DAZN/Paramount without waiting)
+ *   - Drop duplicate $configuration.sendMessage
+ *   - ChatGPT via cdn-cgi/trace
+ *   - HTTP Request and event-interaction
  *
  * [rewrite_local]
  * ^http://httpjs\.local/stream url script-echo-response streaming-check.js
  *
  * [task_local]
- * event-interaction streaming-check.js, tag=流媒体解锁查询, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Siri.png, enabled=true
+ * event-interaction streaming-check.js, tag=Streaming Unlock, img-url=https://raw.githubusercontent.com/Koolson/Qure/master/IconSet/Color/Siri.png, enabled=true
  *
- * 查询参数：
- *   ?policy=节点名
+ * Query:
+ *   ?policy=NodeName
  *   ?format=json
  */
 
-const TITLE = "流媒体服务查询";
+const TITLE = "Streaming Unlock";
 const NF_TITLE = "81280792";
 const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -47,7 +47,7 @@ const GPT_COUNTRIES =
   }));
 
   doneOK(TITLE, items, {
-    node: nodeLabel || policy || "当前策略",
+    node: nodeLabel || policy || "current policy",
     json: { policy: policy, results: results },
   });
 })().catch((err) => {
@@ -63,20 +63,20 @@ async function wrap(name, fn) {
     return r;
   } catch (e) {
     const status = String(e && e.message ? e.message : e) === "timeout" ? "timeout" : "error";
-    return { name: name, status: status, region: "", text: status === "timeout" ? "检测超时 🚦" : "检测失败 ❗️" };
+    return { name: name, status: status, region: "", text: status === "timeout" ? "Timeout 🚦" : "Failed ❗️" };
   }
 }
 
 function formatText(r) {
   if (r.status === "available") {
-    return r.region ? "支持 ➟ " + flagEmoji(r.region) + " 🎉" : "支持 🎉";
+    return r.region ? "Yes ➟ " + flagEmoji(r.region) + " 🎉" : "Yes 🎉";
   }
   if (r.status === "partial") {
-    return r.note || "部分支持 ⚠️";
+    return r.note || "Partial ⚠️";
   }
-  if (r.status === "blocked") return "未支持 🚫";
-  if (r.status === "timeout") return "检测超时 🚦";
-  return "检测失败 ❗️";
+  if (r.status === "blocked") return "No 🚫";
+  if (r.status === "timeout") return "Timeout 🚦";
+  return "Failed ❗️";
 }
 
 function colorize(r) {
@@ -106,7 +106,7 @@ async function checkNetflix(policy) {
   const resp = await qxFetch("https://www.netflix.com/title/" + NF_TITLE, { timeout: 8000, policy: policy });
   const code = resp.statusCode;
   if (code === 403 || code === 451) return { status: "blocked" };
-  if (code === 404) return { status: "partial", note: "支持自制剧集 ⚠️" };
+  if (code === 404) return { status: "partial", note: "Originals only ⚠️" };
   if (code !== 200) throw new Error("http");
   const loc = headerOf(resp, "X-Originating-URL") || headerOf(resp, "Location") || "";
   let region = "US";
@@ -166,7 +166,7 @@ async function checkDisney(policy) {
     const loc = sdk && sdk.session && sdk.session.location;
     if (loc && loc.countryCode) region = String(loc.countryCode).toUpperCase();
     if (sdk && sdk.session && (sdk.session.inSupportedLocation === false || sdk.session.inSupportedLocation === "false")) {
-      return { status: "partial", region: region, note: "即将登陆 ➟ " + flagEmoji(region) + " ⚠️" };
+      return { status: "partial", region: region, note: "Coming soon ➟ " + flagEmoji(region) + " ⚠️" };
     }
   } catch (e) {
     console.log("disney graphql: " + e);
@@ -351,7 +351,7 @@ function escapeHtml(s) {
 
 function pageWrap(title, inner) {
   return (
-    "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">" +
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<title>" +
     escapeHtml(title) +
@@ -394,13 +394,13 @@ function doneOK(title, items, extra) {
   extra = extra || {};
   const node = extra.node || policyName();
   const httpInner =
-    renderRows(items, "http") + (node ? '<div class="foot">节点 ➟ ' + escapeHtml(node) + "</div>" : "");
+    renderRows(items, "http") + (node ? '<div class="foot">Node ➟ ' + escapeHtml(node) + "</div>" : "");
   const popup =
     '<p style="text-align:center;font-family:-apple-system;font-size:large;font-weight:thin">' +
     "--------------------------------------<br/>" +
     renderRows(items, "popup") +
     "--------------------------------------<br/>" +
-    (node ? '<font color="#CD5C5C"><b>节点</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
+    (node ? '<font color="#CD5C5C"><b>Node</b> ➟ ' + escapeHtml(node) + "</font>" : "") +
     "</p>";
 
   if (isHttpRequest()) {
@@ -432,7 +432,7 @@ function doneOK(title, items, extra) {
 function doneErr(title, message) {
   doneOK(title, [
     {
-      key: "错误",
+      key: "Error",
       value: message,
       html: '<font color="#dc3545">' + escapeHtml(message) + "</font>",
     },
